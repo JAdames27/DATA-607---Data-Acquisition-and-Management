@@ -7,36 +7,83 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+#install.packages("RCurl")
+#install.packages("readr")
+library(readr)
+library(RCurl)
+library(dplyr)
+```
+## Introduction
+The author of the following article was interested in knowing how people liked their steaks prepared and whether their choice shed light to any aspect of their lifestyle.  Although his investigation produced inconclusive results, his plan of action was to determine if risk-averse people were more likely to order their steak well done?  The data obtained in his investigation was based on participant's responses to risk related questions and compared against their responses on "steak doneness".
+
+```{r - Loading CSV}
+#load data that was uploaded to github as a csv file.
+#use the raw data url rather than the display url.
+#assign this function to the variable myURL
+myURL <- getURL("https://raw.githubusercontent.com/JAdames27/DATA-607---Data-Acquisition-and-Management/main/DATA%20607%20-%20Assignment%201/steak-risk-survey.csv")
+
+
+#once the data is retrieved from the github url, assign csv data to the variable myData
+myData <- read.csv(text = myURL)
+
+#use the "glimpse()" function to see the column titles (variables)
+glimpse(myData)
+
+#assign the same data to a new variable, myData1, to work with without changing the original data frame
+myData1 <- myData
+
+```
+## Renaming Columns
+After taking a glimpse, I renamed the titles of each column since they were too long, making the data harder to read. 
+
+However, the information for one of the columns was important:
+   -Lottery A, you have a 50% chance of success, with a payout of $100.
+   -Lottery B, you have a 90% chance of success, with a payout of $20.
+
+Assuming you have $10 to bet, would you play Lottery A or Lottery B?
+
+I renamed this column to "Lottery A or B?", but the responses are based on their answers to the information given above.
+In short, Lottery A is the riskier choice vs Lottery B is safer.
+
+
+```{r - 2}
+
+colnames(myData1) <- c('Respondent_ID',"Lottery_A_or_B", "Smokes_Cigarettes", "Drinks_Alcohol", "Gambles", "Skydived", "Speeds_while_Driving", "Cheated_on_Spouse", "Eats_Steak", "Steak_Doneness", "Gender", "Age", "Household_Income", "Education", "Location")
+
+#now the data frame is much easier to read
+head(myData1)
+#since the results of the author's investigation were inconclusive based on the original data, I created a subset data frame to only look at responses to health related questions
+#all other questions/columns that did not DIRECTLY relate to health were removed.
+myDataSub <- subset(myData1, select = -c(2,5,8,13:15))
+
+head(myDataSub)
+
+
+#remove the observations coming from participants who do not eat steak.
+myDataSub1 <- myDataSub %>%
+  filter(Eats_Steak == "Yes")
+
+
+head(myDataSub1)
+
 ```
 
-## R Markdown
+## Conclusion
+I think that the author's approach was a great start, but I feel that some of his questions, while still valid, were too general. The initial question that was posed was, "Are risk-averse people more likely to order their steak well done?".  As a follow up, he might want to narrow his questions down to those relating to risk while eating.  ie. "Are people who are less open to exploring new foods more likely to order their steak well done?"
 
-1. Take the data, and create one or more code blocks.  You should finish with a data frame that contains a subset of the columns in your selected dataset.  If there is an obvious target (aka predictor or independent) variable, you should include this in your set of columns.  You should include (or add if necessary) meaningful column names and replace (if necessary) any non-intuitive abbreviations used in the data that you selected.  For example, if you had instead been tasked with working with the UCI mushroom dataset, you would include the target column for edible or poisonous, and transform “e” values to “edible.”  Your deliverable is the R code to perform these transformation tasks. 
+I might have asked additional risk related questions that have more to do with health and eating habits.  For example, questions such as; "Do you overeat? (more than one serving at a time)",
+"Do you have high cholesterol?", "Do you have high blood pressure?", "Do you have diabetes?", or questions that reflect bad experiences while dining, "Do you eat sushi?", "Have you ever gotten sick from eating under-cooked foods?", "Have you ever gotten food poisoning?", etc.
 
-2. Make sure that the original data file is accessible through your code—for example, stored in a GitHub repository or AWS S3 bucket and referenced in your code.  If the code references data on your local machine, then your work is not reproducible! 
+Also, having too many variables sometimes makes it harder to see relationships between them, in my opinion.
 
-3. Start your R Markdown document with a two to three sentence “Overview” or “Introduction” description of what the article that you chose is about, and include a link to the article. 
 
-4. Finish with a “Conclusions” or “Findings and Recommendations” text block that includes what you might do to extend, verify, or update the work from the selected article. 
 
-5. Each of your text blocks should minimally include at least one header, and additional non-header text. 
 
-6. You’re of course welcome—but not required--to include additional information, such as exploratory data analysis graphics (which we will cover later in the course). 
 
-7. Place your solution into a single R Markdown (.Rmd) file and publish your solution out to rpubs.com.   
 
-8. Post the .Rmd file in your GitHub repository, and provide the appropriate URLs to your GitHub repositor y and your rpubs.com file in your assignment link. 
+## Citations
+https://fivethirtyeight.com/features/how-americans-like-their-steak/
 
-```{r cars}
-summary(cars)
-```
+MLA Citation
+WaltHickey. “How Americans like Their Steak.” FiveThirtyEight, FiveThirtyEight, 16 May 2014, fivethirtyeight.com/features/how-americans-like-their-steak/. 
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

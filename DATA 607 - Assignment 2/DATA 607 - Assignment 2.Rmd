@@ -1,0 +1,102 @@
+---
+title: "Databases"
+author: "Julian Adames-Ng"
+date: "9/5/2024"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#install.packages("RMariaDB")
+#install.packages("DBI")
+#install.packages("dplyr")
+library(dplyr)
+library(RMariaDB)
+library(DBI)
+
+```
+## Introduction
+
+The goal of this project is to collect data using a survey asking people to rank six different movies on a scale from 1-5.  Once collected, the data is to be loaded into a SQL database which should then be accessed through R for continued manipulation.
+
+## Retrieving Data from MySQL
+
+The following code is used to extract the data from the constructed table on movie ratings.
+
+The imported table is declared as "data".
+
+```{r connect to sql - 1}
+
+user <- 'root'
+password <- 'Jkx3964!'
+database <- 'myDB'
+host <- 'localhost'
+port <- 3306
+
+connection <- dbConnect(
+  drv = MariaDB(),
+  dbname = database,
+  user = user,
+  password = password,
+  host = host,
+  port = port
+  )
+
+tbl(connection, "movie_ratings_3") %>%
+  collect() -> data
+
+dbDisconnect(connection)
+
+data
+
+```
+
+## Handling Missing Data
+
+All of the individuals have seen most or all of the movies, so we are only missing a few data values.
+
+To deal with the issue of missing data, we could use measures of central tendency (mean, median, mode) to replace the NULL values in our data frame.  In my example, I decided to compute the mean of each column in MySQL and altered the NULL entries to those means.
+
+However, as the previously constructed table, "movie_ratings_3", was constructed with INT or integer data types for the ratings values, computing the mean forced rounding to the closest integer.  This could potentially work, but I decided to alter the data types to decimal values with three digits and up to two decimal places.  This way, I replace the NULL entries with more accurate values of the column mean.  This also allows for a seemingly more continuous rating system.
+
+I reconstructed the original table under "movie_ratings_4", including the INT data types.
+I then used the ALTER feature in MySQL to change the data types in the newly constructed table.
+Using the same code above, I retrieved the data from the new table and assigned it to a new variable, "data1".
+
+```{r pressure, echo=FALSE}
+
+user <- 'root'
+password <- 'Jkx3964!'
+database <- 'myDB'
+host <- 'localhost'
+port <- 3306
+
+connection <- dbConnect(
+  drv = MariaDB(),
+  dbname = database,
+  user = user,
+  password = password,
+  host = host,
+  port = port
+  )
+
+tbl(connection, "movie_ratings_4") %>%
+  collect() -> data1
+
+dbDisconnect(connection)
+
+data1
+
+```
+
+
+
+## Conclusion
+
+Retrieving data constructed through MySQL (or collected from anywhere) may not always have ideal values or structure that will allow for easy processing.  It is important to know how to deal with data given as specific data types when other data types are better suited to address the problem at hand.  Not all data is complete either.  In such situations, remedying this through statistical methods can help provide insight in places or situations that are lacking and may allow us to continue working with data observations that may otherwise be discarded.
+
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

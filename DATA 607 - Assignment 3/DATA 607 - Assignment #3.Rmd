@@ -1,0 +1,288 @@
+---
+title: "DATA 607 - Assignment #3"
+author: "Julian Adames-Ng"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(tidyverse)
+library(countries)
+
+```
+
+## Introduction
+
+As we work with larger and more complicated data sets, it gets difficult to decipher information when the data isn't represented in a readable way. We will use several tools to help manipulate text, filter data frames, and recognize patterns within data for the purpose of "tidying" up our data sets.
+
+
+```{r read data}
+
+# read in the data
+majors <- read.csv(url("https://raw.githubusercontent.com/JAdames27/DATA-607---Data-Acquisition-and-Management/main/DATA%20607%20-%20Assignment%203/majors-list.csv"))
+
+head(majors)
+
+
+```
+
+## Task 1
+Using the 173 majors listed in fivethirtyeight.com's College Majors dataset [https://fivethirtyeight.com/features/the-economic-guide-to-picking-a-college-major/], provide code that identifies the majors that contain either "DATA" or "STATISTICS"
+
+```{r - Filtering the Data-frame}
+
+dataStats <- majors %>%  
+  filter_all(any_vars(grepl("DATA", .)|grepl("STATISTICS", .)))
+
+dataStats
+
+```
+
+## Task 2
+Write code that transforms the data below:
+
+[1] "bell pepper"  "bilberry"     "blackberry"   "blood orange"
+
+[5] "blueberry"    "cantaloupe"   "chili pepper" "cloudberry"  
+
+[9] "elderberry"   "lime"         "lychee"       "mulberry"    
+
+[13] "olive"        "salal berry"
+
+Into a format like this:
+
+c("bell pepper", "bilberry", "blackberry", "blood orange", "blueberry", "cantaloupe", "chili pepper", "cloudberry", "elderberry", "lime", "lychee", "mulberry", "olive", "salal berry")
+
+### Task 2a: Creating the Data
+
+First I declared "myList" which outputs the data mentioned initially above.
+
+```{r }
+
+myList <- c("bell pepper", "bilberry", "blackberry", "blood orange", "blueberry", "cantaloupe", "chili pepper", "cloudberry", "elderberry", "lime", "lychee", "mulberry", "olive", "salal berry")
+
+myList
+
+```
+
+### Task 2b: Changing List to String
+
+I then used the paste0() function to add a leading quotation mark and unlist() to turn "myList" into a string that separated each element by the following characters between the single quotes '", '.
+
+```{r }
+
+myString1 <- paste0('"',unlist(myList), collapse='", ')
+
+myString1
+
+```
+
+### Task 2c: Appending Additional Text 
+I still needed to add the "c()" text to the beginning and end of the string.
+
+I appended c( to the front of the string and ") to the end.
+```{r }
+
+
+myString2 <- paste0('c(', myString1, '")')
+
+myString2
+```
+
+### Task 2d: Concatenating the String
+
+Since the c() function does not remove the backslashes in "myString2", I used the cat() function to work around this issue.
+
+```{r }
+
+cat(myString2)
+
+```
+
+### Task 2e: Confirming Congruence
+
+I used the identical() function to determine if the output to "myString2" and the expected text (ie. c("bell pepper", "bilberry", "blackberry", "blood orange", "blueberry", "cantaloupe", "chili pepper", "cloudberry", "elderberry", "lime", "lychee", "mulberry", "olive", "salal berry")) are equal to each other.
+
+
+```{r }
+identical((myString2),'c("bell pepper", "bilberry", "blackberry", "blood orange", "blueberry", "cantaloupe", "chili pepper", "cloudberry", "elderberry", "lime", "lychee", "mulberry", "olive", "salal berry")')
+
+```
+
+## Task 3
+
+Describe, in words, what these expressions will match:
+
+(.)\1\1
+"(.)(.)\\2\\1"
+(..)\1
+"(.).\\1.\\1"
+"(.)(.)(.).*\\3\\2\\1"
+
+### Task 3a: [Expression 1] 
+In R, the expression
+
+##### (.)\1\1
+
+needs to be expressed as 
+
+##### (.)\\\1\\\1
+
+since R requires an escape for the backslash.  The latter expression will match (.) to some character in a given string and each instance of '\\1' matches to that same character being repeated again.  So this will match to any character that appears and repeats two more times consecutively within the string.  
+
+However, if taken explicitly as 
+
+##### (.)\1\1
+
+there is no matching.
+
+
+### Task 3b: [Expression 2] 
+The expression
+
+##### "(.)(.)\\\2\\\1"
+
+matches to nothing. However, without the enclosing double quotation marks, the expression
+
+##### (.)(.)\\\2\\\1
+
+matches to two consecutive characters, ie. (.)(.), immediately followed by the same two characters in reverse order, ie. \\2\\1.  So this will match to any collection of four characters that is "palindromic" within the given text.
+
+
+### Task 3c: [Expression 3] 
+The expression
+
+##### (..)\1
+
+matches to nothing. However, with the backslash escape, the expression
+
+##### (..)\\\1
+
+matches to two consecutive characters that are immediately followed by the same two consecutive integers within the given text.
+
+
+### Task 3d: [Expression 4] 
+The expression 
+
+##### "(.).\\\1.\\\1"
+
+matches to nothing. However, without the enclosing double quotation marks, the expression
+
+##### (.).\\\1.\\\1
+
+matches the following way: 
+  
+  (.) is grouped in parentheses as group 1 and matches to any character.
+  
+  . is un-grouped and matches to any character.
+  
+  \\\1 refers to the character in group 1.
+  
+  . is un-grouped and matches to any character.
+
+  \\\1 refers to the character in group 1 again.
+
+
+### Task 3e: [Expression 5]
+
+"(.)(.)(.).*\\3\\2\\1"
+
+  (.) is grouped in parentheses as group 1 and matches to any character.
+  
+  The following (.) is grouped in parentheses as group 2 and matches to any character.
+  
+  The last (.) is grouped in parentheses as group 3 and matches to any character.
+  
+  The .* will can match multiple characters after the (.)(.)(.) which references the first three.
+  
+  The \\3\\2\\1 refers to the three grouped elements and returns them in reverse order.
+
+
+
+## Task 4
+
+Construct regular expressions to match words that:
+
+Start and end with the same character.
+Contain a repeated pair of letters (e.g. "church" contains "ch" repeated twice.)
+Contain one letter repeated in at least three places (e.g. "eleven" contains three "e"s.)
+
+### Task 4a: Construct regular expressions to match words that start and end with the same character.
+
+I create a list of string text, text1. and a pattern to match to, pattern1.
+
+The output confirms that the code runs properly since it returns only the elements that strictly start and end with the same character.
+```{r }
+
+# Example string
+text1 <- c('abra', '24y', 'ucv', '818259', '8sdgsdfh8', 'kodak')
+
+# create the pattern
+pattern1 <- "^(\\w)\\w*\\1$"
+
+# Find all matches in the text
+matches <- gregexpr(pattern1, text1)
+
+# Extract the matching substrings
+results <- regmatches(text1, matches)
+
+print("Matches:")
+print(unlist(results))
+```
+
+### Task 4b: Construct regular expressions to match words that contain a repeated pair of letters (e.g. "church" contains "ch" repeated twice.)
+
+I create a list of string text, text2. and a pattern to match to, pattern2.
+
+The output confirms that the code runs properly.
+
+```{r }
+
+text2 <- c('church', 'mississipi', 'banana pepper')
+
+pattern2 <- "\\w*(\\w\\w)\\w*\\1\\w*"
+
+# Find all matches in the text
+matches <- gregexpr(pattern2, text2)
+
+# Extract the matching substrings
+results <- regmatches(text2, matches)
+
+print("Matches:")
+print(unlist(results))
+
+```
+
+### Task 4c: Construct regular expressions to match words that contain one letter repeated in at least three places (e.g. "eleven" contains three "e"s.)
+
+I create a list of string text, text3. and a pattern to match to, pattern3.
+
+The output confirms that the code runs properly.
+
+```{r }
+
+text3 <- c('eleven', 'cincinnati', 'boars', 'salamander', 'abrakababra', 'whatever')
+
+pattern3 <- "\\w*(\\w)\\w*\\1\\w*\\1\\w*"
+
+# Find all matches in the text
+matches <- gregexpr(pattern3, text3)
+
+# Extract the matching substrings
+results <- regmatches(text3, matches)
+
+print("Matches:")
+print(unlist(results))
+
+```
+
+## Conclusion
+
+When working with data, it is often very useful to manipulate text in addition to the data itself in order to organize it in a readable or "tidy" way.  This can come in the form of filtering data stored in a data frame or re-labeling columns.  Another useful tool is using code to recognize patterns within a set of data.  This can be especially helpful for extremely large data sets.  Organized data is much easier to work with and obtain insights from.
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

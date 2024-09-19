@@ -1,0 +1,449 @@
+---
+title: "DATA 607 - Project 1"
+author: "Julian Adames-Ng"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(stringr)
+```
+
+## Introduction
+
+When working with data, sometimes it is not available in a readable or executable format.  Even if the data is readable by the database management system, it may not be easy for a human to understand.  In such situations, we would like to "tidy" our data.  Some information in a data set may not be necessary in some situations.  Removing this unneeded data can remove clutter and provide an interface that is easy to manage.  In this project, we will use data collected from a chess tournament to create a new data-frame that can be accessed as a '.csv' file.  This new data-frame must consist of the following variable columns: 
+
+(1) The contestant's full name
+(2) The contestant's state of origin
+(3) The total number of points that the contestant earned
+(4) The contestant's pre-rating score
+(5) The average pre-rating of the contestant's opponents
+
+We will see that the initial data set, given as a '.txt' file, presents itself in a relatively unstructured manner and includes many characters that will not be used in our analysis, therefore, we must transform this data to our liking.
+
+
+## (1) Loading the Data:
+
+We must first retrieve our data from a source.  In this case, the .txt file is obtained from a url.  I read this data in and assign it to the variable 'chess_txt'.
+Then I use the 'head()' function to take a peak at the data and check its data type using 'typeof()'.
+
+
+
+```{r loading data}
+
+chess_txt <- read.csv("https://raw.githubusercontent.com/JAdames27/DATA-607---Data-Acquisition-and-Management/main/DATA%20607%20-%20Project%201/tournamentinfo.txt")
+
+head(chess_txt)
+
+typeof(chess_txt)
+
+```
+
+
+## (2a) Transforming the Data: Data Types
+
+However, when read in, we see that the data type is a list using the typeof() function.  I turn the data into one long string of characters to allow string operations from the 'stringr' library.  This allows me to parse through the data as needed.  The text data is vast, and since we now have a string, the 'head()' function will not allow us to peak into the data.  We can use the 'substr()' function to achieve a similar goal with strings.  Below I peaked at the first 2500 characters of the string.
+
+
+```{r }
+
+chess_str <- toString(chess_txt)
+
+substr(chess_str, 1, 2500)
+
+
+
+```
+
+## (2b) Transforming the Data: Splitting the Initial String
+
+When calling this new string, as above, we see that the data is much less readable than what we initially had.  I use the strsplit() function to divide the text based on some unnecessary series of characters.  From the text data above, I can see that the data is separated using a string of dashes and other special characters.  This is what I used to split my text and assigned it to 'chess_split1'.
+
+```{r }
+
+chess_split1 <- strsplit(chess_str, split = '\", \"-----------------------------------------------------------------------------------------\", \n\"')
+
+```
+
+## (2c.1) Transforming the Data: Splitting Strings within Nested Lists (part 1)
+
+After splitting, the resulting data returns a list within a list.  All of our data is in the 'inner' list that is stored in the first index of of our encompassing list.  I index this outer list to access only the nested list found in that first index, then I index even further to get the discrete elements in this list, ie. 'chess_split1[[1]]'.  These discrete elements correspond to the rows or observations of our data.  I relabel this to 'chess_list1'.
+
+```{r }
+
+head(chess_split1[[1]])
+
+chess_list1 <- c(chess_split1[[1]])
+
+```
+
+## (2c.2) Transforming the Data: Splitting Strings within Nested Lists (part 2)
+
+However, when taking a closer look we can see that the initial split did not create the desire number of observations.  This is because the specific string of dashes and special characters that was used to split the data does not match the other instances of separating dashes.  I must use the 'strsplit()' function again, this time using a for loop and the new sequence of characters for the second split.  To do this, I needed to use a data type that is iterable.  The assignment of 'chess_list2' and 'chess_list3' allows for this.  I can now iterate through using a for loop and assign the resulting data to 'myList'.  I again use the 'head()' function to take a peak at this new list.
+
+```{r }
+
+chess_list2 <- list(chess_list1)
+
+chess_list3 <- chess_list2[[1]]
+
+myList <- list()
+
+for (i in chess_list3){
+  i = strsplit(i, '\", \"-----------------------------------------------------------------------------------------\", \"')
+  list(i)
+  myList <- append(myList, list(i[[1]]))
+}
+
+head(myList)
+```
+
+## (2d) Transforming the Data: Reintegrating Data into One Simple List of Strings
+
+We can now see that the data separates into 65 rows, (ie. 1 header row + 64 observations).  We also see that this is still formatted as nested lists.  The following for loop creates a new, empty list, ie. 'myList2', and appends the rows obtained from the nested lists in the original 'myList'.  The 'myList2' assignment contains all of the data in question, but in one un-nested, iterable list as shown below.  The final 'iteration' has no element to iterate through so it returns as 'NA' for index 66, ie. 'myList[66]'  Therefore our final element is indexed at 65, ie. 'myList[65]' represents the 64th observation.
+
+
+```{r }
+
+myList2 <- list()
+for (i in myList){
+  myList2 <- append(myList2, i[1])
+  myList2 <- append(myList2, i[2])
+}
+
+#full list
+head(myList2)
+
+```
+
+## (2e) Transforming the Data: Verifying Intended Transformation
+
+Using the same 'myList2' assignment, we can confirm that the indexing works as intended by accessing the following:
+
+#### The Header Row (using index 1)
+      ie. 'myList2[1]'
+      
+#### The First Entry/Observation (using index 2)
+      ie. 'myList2[2]'
+      
+#### The Final Entry/Observation (using index 65)
+      ie. 'myList2[65]'
+
+```{r }
+
+#header row
+myList2[1]
+
+#first entry
+myList2[2]
+
+#last entry
+myList2[65]
+
+```
+
+## (3) Parsing Through the Data: Data Filtering/Pruning
+
+Even though we have a much 'nicer' or 'tidier' collection of data than what we started with, there is still unwanted information that makes this data "noisy".  However, within this structure there is a patterns that each observation row shares with one another.  We can use Regular Expressions (regex) to extract only what we need from each row as long as they share the same pattern. Such is the case in this instance.  I've narrowed down the data for each row even further.  The resulting data strings contain all of the information needed to complete our task.  However, as we've seen before, this is given in a nested list, ie. 'results1_list[[1]]'.
+
+```{r }
+
+#create a pattern to match
+pattern <- '.*\\w*\\s\\w.*R:\\s*[0-9]*'
+
+# Find all matches in the text - we only look at the observation rows, ie. indices 2 through 65.
+matches <- gregexpr(pattern, myList2[2:65])
+
+# Extract the matching substrings
+results <- regmatches(myList2[2:65], matches)
+
+#un-listing to string
+results1 <- unlist(results)
+
+#re-listing string to 'nicer' list
+results1_list <- list(results1)
+
+#results
+head(results1_list[[1]])
+
+```
+
+## (4a) Extracting Data: Column 1
+
+Column 1 of our desired data-frame consists of the full names of the tournament contestants.  Let's parse through the previously obtained list using a pattern match that represents the names, regardless of the number of middle names or initials.  Then we can extract what we need.  Here I used two for loops to complete the narrowing down process correctly.  The desired name data is contained in a list called 'name_results2'.  We can unlist this to see the individual listings.
+
+```{r }
+
+#column 1: name
+
+#this for loop narrows down the entire string to just include the name data with some whitespaces
+for (i in results1_list[[1]]){
+  name_pattern <- '[A-Z][A-Z]*[A-Z]\\s.*\\s\\s\\s\\s\\s+'
+  
+  # Find all matches in the text
+  name_matches <- gregexpr(name_pattern, results1_list[[1]])
+
+  # Extract the matching substrings
+  name_results <- regmatches(results1_list[[1]], name_matches)
+}
+
+#this for loop narrows the previously narrowed down strings to only include the names and/or middle initials without leading or trailing whitespaces or special characters 
+name_pattern2 <- '[A-Z].*[A-Z]'
+
+for (i in name_results){
+  #Find all matches in the text
+  name_matches2 <- gregexpr(name_pattern2, name_results)
+
+  # Extract the matching substrings
+  name_results2 <- regmatches(name_results, name_matches2)
+}
+
+print('Name Matches:')
+print(unlist(name_results2))
+
+```
+
+## (4b) Extracting Data: Column 2
+
+As in (4a), we use an identical process to obtain the state of origin information, but with a different pattern.  The desired data is contained in 'state_results2'.
+
+```{r }
+
+# column 2: states
+
+for (i in results1_list[[1]]){
+  state_pattern <- '\\s\\s[A-Z][A-Z]\\s'
+
+
+  # Find all matches in the text
+  state_matches <- gregexpr(state_pattern, results1_list[[1]])
+
+  # Extract the matching substrings
+  state_results <- regmatches(results1_list[[1]], state_matches)
+}
+
+state_pattern2 <- '[A-Z][A-Z]'
+
+for (i in state_results){
+  #Find all matches in the text
+  state_matches2 <- gregexpr(state_pattern2, state_results)
+
+  # Extract the matching substrings
+  state_results2 <- regmatches(state_results, state_matches2)
+}
+
+print('State Matches:')
+print(unlist(state_results2))
+
+```
+
+## (4c) Extracting Data: Column 3
+
+We continue the process for the total points for each contestant.  Here we only required one for loop as it accomplished the narrowing down process immediately.  This data is contained in 'pts_results'.
+
+```{r }
+
+#column 3: total points
+
+for (i in results1_list){
+  pts_pattern <- '[0-9]\\.[0-9]'
+  
+  # Find all matches in the text
+  pts_matches <- gregexpr(pts_pattern, results1_list[[1]])
+
+  # Extract the matching substrings
+  pts_results <- regmatches(results1_list[[1]], pts_matches)
+  #print('\\.*\\w\\w*\\s\\w*')
+}
+
+print('Point Matches:')
+print(unlist(pts_results))
+
+```
+
+## (4d) Extracting Data: Column 4
+
+In columns 1 and 2, we used two for loops since it was more difficult to narrow down the desired information.  Likewise, we do so to obtain the contestant ratings and contain it in 'rating_results2'.
+
+```{r }
+
+#column 4: Player's Pre-Rating
+
+for (i in results1_list){
+  rating_pattern <- 'R:\\s*[0-9]*'
+
+  # Find all matches in the text
+  rating_matches <- gregexpr(rating_pattern, results1_list[[1]])
+
+  # Extract the matching substrings
+  rating_results <- regmatches(results1_list[[1]], rating_matches)
+}
+
+rating_pattern2 <- '[0-9][0-9]*'
+
+for (i in rating_results){
+  #Find all matches in the text
+  rating_matches2 <- gregexpr(rating_pattern2, rating_results)
+
+  # Extract the matching substrings
+  rating_results2 <- regmatches(rating_results, rating_matches2)
+}
+
+print('Pre-Rating Matches:')
+print(unlist(rating_results2))
+
+```
+## (4e.1) Extracting Data: Column 5 part 1
+
+The fifth and final column must represent the average pre-rating of all of an individual's opponents.  This information is not readily available, however, we can produce it using the data collected from their tournament match-ups.  First, we can use the same pattern matching process, as shown previously, to obtain the sequence of chess match outcomes for each player.
+
+```{r }
+
+#column 5: Average Pre-Chess Rating of Opponents
+
+#game stats
+for (i in results1_list[[1]]){
+  stats_pattern <- '[0-9]\\.[0-9].*[WLD]\\s\\s\\s*[0-9]*'
+
+  # Find all matches in the text
+  stats_matches <- gregexpr(stats_pattern, results1_list[[1]])
+
+  # Extract the matching substrings
+  stats_results <- regmatches(results1_list[[1]], stats_matches)
+  #print('\\.*\\w\\w*\\s\\w*')
+}
+
+print('Statistics Matches:')
+#print(unlist(games_results))
+
+head(stats_results)
+  
+```
+## (4e.2) Extracting Data: Column 5 part 2
+
+We only want the data on wins (represented by 'W'), losses (represented by 'L'), or draws (represented by 'D').  All other outcomes, ie. 'B','H','U', imply that no game was played, so we exclude these.  Regardless of the win/loss/draw outcome, we count these as played games.  So, for every row/player, we use the opponent information for each game, extract the data and re-list it into a new list called 'opp_idlist'.  The for loop accomplishes this for every row/player.
+
+```{r }
+
+opp_idlist <- list()
+
+for (i in stats_results){
+  i = str_sub(i, 4, -1)
+  x <- str_extract_all(i, "\\d+")
+  opp_idlist <- append(opp_idlist, x)
+}
+
+head(opp_idlist)
+
+```
+
+## (4e.3) Extracting Data: Column 5 part 3
+
+Now that we have the listings of played opponents for each contestant in the form of their player ID's, we can use this to return a corresponding listing of these opponent's pre-ratings.  Then we can take the average rating for those that completed games against the contestant in question.
+
+## (5) Verifying Data: Correct Data Types and Matching Column Length
+
+Before we load that data in.  Let's first create the data-frame with what we have so far.  To do so, we must ensure that whatever we load into each column matches the number of elements in the other columns and that they are all of the correct data type.
+
+```{r }
+
+#set column names using unlisted data
+name = unlist(name_results2)
+state = unlist(state_results2)
+points = unlist(pts_results)
+rating = unlist(rating_results2)
+
+#verifying matching lengths
+length(name)
+length(state)
+length(points)
+length(rating)
+
+#verifying correct data types
+typeof(name)
+typeof(state)
+typeof(points)
+typeof(rating)
+
+```
+
+## (6) Creating the Data-Frame: 
+
+Now we have what we need to create our 'tidy' data-frame.  We will call it 'chess_df'.
+
+```{r }
+
+chess_df <- data.frame(Name = name, State = state, Points = points, Pre_Rating = rating)
+
+head(chess_df)
+
+```
+
+## (7) Inserting a New Column: 
+
+Notice that this data-frame is still missing a required column, namely the one that represents the opponents' average pre-ratings.
+
+In order to create this column, we must match the opponent's player ID to their corresponding pre-rating, then take the average.  However, we run into a problem taking this average with the current data since the values extracted from the pre-ratings are of 'character' data types and cannot be manipulated using Mathematical or Logical operations.  Below, I created the new column labeled "Pre-Rating" and in the same instance, I transformed this column from 'character' values to 'numerical' values.  This allows us to take the average properly.  We can confirm below.
+
+```{r }
+
+#turn Pre_Rating column from character to numeric
+chess_df$Pre_Rating <- as.numeric(as.character(chess_df$Pre_Rating))
+sapply(chess_df, class)
+
+```
+
+## (8) Outputting the Desired Data-Frame:
+
+Now that we have the correct data types as well as matching column lengths, we can integrate this to obtain the correct data-frame.  I used a nested for loop to iterate through the list of opponent player IDs, and since most contestants played multiple opponents, I iterated within each row to create a new list of with the ratings of each player's opponents.  Since this column now contains numerical values, we can use the mean() function to obtain the average opponent rating for each player.  I've assigned it to the variable 'opp_avg' below and loaded the column values into the chess_df data-frame.
+
+```{r }
+
+opp_rlist <- list()
+opp_avg <- list()
+
+#this for loop iterates through the list of contestants
+#which will each have several opponent IDs
+for (j in (1:64)){
+  #for each individual contestant, this for loop
+  #iterates through their respective opponent IDs
+  for (i in opp_idlist[j]){
+  #assign the returned values for each iteration to the variable y  
+  y <- unlist(as.list(chess_df[i,]['Pre_Rating']))
+  #append that instance of y to the opponent ratings list before iterating again
+  opp_rlist <- append(opp_rlist, y)
+  }
+  
+  #now that opp_rlist is a list of numerical opponent ratings,
+  #we can take the mean of the unlisted data
+  m = mean(unlist(opp_rlist))
+ 
+  #we assign that mean calculation to opp_avg
+  opp_avg <- append(opp_avg, m)
+}
+
+#load the averages into their own column within the data-frame
+chess_df$AvgOpp_Rating <- unlist(opp_avg)
+
+#produce the data-frame
+head(chess_df)
+
+```
+
+## (9) Writing Data-Frame to CSV File:
+
+The final step in this process is to write the completed data-frame to a '.csv' file to be accessible by other database management systems like MySQL.
+I do this by using the 'write.csv()' function on 'chess_df' and assigning it the file name "chess_data.csv".  This file should be located in the same directory as the R markdown file used to create it.  (I've included it in the appropriate Github repository).
+
+```{r }
+
+write.csv(chess_df, file = "chess_data.csv")
+
+read.csv('chess_data.csv')
+
+```
+
+## Conclusion
+
+In this project, we successfully cleaned, restructured, and extracted the necessary information from the raw chess tournament data. By carefully selecting the relevant data points and organizing them into a structured format, we created a more readable and usable data frame. The initial unstructured '.txt' file was transformed into a tidy and well-organized format, removing unnecessary characters and clutter. Finally, the cleaned data was exported as a '.csv' file, allowing for easy access and further analysis. This process not only improved the clarity of the data but also laid the foundation for more efficient and meaningful analysis in future work.

@@ -410,15 +410,16 @@ for (j in (1:64)){
   #iterates through their respective opponent IDs
   for (i in opp_idlist[j]){
   #assign the returned values for each iteration to the variable y  
-  y <- unlist(as.list(chess_df[i,]['Pre_Rating']))
+  y <- as.list(chess_df[i,]['Pre_Rating'])
   #append that instance of y to the opponent ratings list before iterating again
   opp_rlist <- append(opp_rlist, y)
   }
   
   #now that opp_rlist is a list of numerical opponent ratings,
   #we can take the mean of the unlisted data
-  m = mean(unlist(opp_rlist))
- 
+  m = mean(as.numeric(unlist(opp_rlist[j])))
+  
+  #print(m)
   #we assign that mean calculation to opp_avg
   opp_avg <- append(opp_avg, m)
 }

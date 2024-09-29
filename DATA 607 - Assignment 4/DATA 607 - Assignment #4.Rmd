@@ -209,6 +209,13 @@ delayed_df$Avg_Pct_SD <- ifelse(wide_flights$Airline == "Alaska", d_SD_Alaska, d
 
 delayed_df
 
+#write to csv
+write.csv(delayed_df, 'flights.csv')
+
+flights_csv <- read.csv('flights.csv')
+
+flights_csv
+
 ```
 ## Conclusion
 

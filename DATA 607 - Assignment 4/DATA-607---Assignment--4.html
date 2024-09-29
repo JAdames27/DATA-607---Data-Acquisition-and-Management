@@ -716,6 +716,34 @@ delayed_df</code></pre>
 ## 8   Alaska     San_Diego      20 0.08620690     0.02654305 0.00097   0.001388
 ## 9   Alaska San_Francisco     102 0.16859504     0.02654305 0.00231   0.001388
 ## 10  Alaska       Seattle     305 0.14212488     0.02654305 0.00188   0.001388</code></pre>
+<pre class="r"><code>#write to csv
+write.csv(delayed_df, &#39;flights.csv&#39;)
+
+flights_csv &lt;- read.csv(&#39;flights.csv&#39;)
+
+flights_csv</code></pre>
+<pre><code>##     X Airline          City Delayed  Pct_Delay Mean_Pct_Delay  Pct_SD
+## 1   1 AM West   Los_Angeles     117 0.14426634     0.02178547 0.00144
+## 2   2 AM West       Phoenix     415 0.07897241     0.02178547 0.00067
+## 3   3 AM West     San_Diego      65 0.14508929     0.02178547 0.00145
+## 4   4 AM West San_Francisco     129 0.28730512     0.02178547 0.00312
+## 5   5 AM West       Seattle      61 0.23282443     0.02178547 0.00248
+## 6   6  Alaska   Los_Angeles      62 0.11091234     0.02654305 0.00137
+## 7   7  Alaska       Phoenix      12 0.05150215     0.02654305 0.00041
+## 8   8  Alaska     San_Diego      20 0.08620690     0.02654305 0.00097
+## 9   9  Alaska San_Francisco     102 0.16859504     0.02654305 0.00231
+## 10 10  Alaska       Seattle     305 0.14212488     0.02654305 0.00188
+##    Avg_Pct_SD
+## 1    0.001832
+## 2    0.001832
+## 3    0.001832
+## 4    0.001832
+## 5    0.001832
+## 6    0.001388
+## 7    0.001388
+## 8    0.001388
+## 9    0.001388
+## 10   0.001388</code></pre>
 </div>
 <div id="conclusion" class="section level2">
 <h2>Conclusion</h2>

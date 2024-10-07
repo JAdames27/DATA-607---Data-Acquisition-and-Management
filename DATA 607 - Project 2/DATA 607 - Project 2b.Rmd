@@ -1,0 +1,605 @@
+---
+title: "DATA 607 - Project 2: Data Set 2"
+author: "Julian Adames-Ng"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+#install and load libraries
+#install.packages('RMySQL', repos='http://cran.us.r-project.org')
+#install.packages('dplyr')
+#install.packages('tidyr')
+#install.packages('DT')
+#install.packages('readr')
+
+options(repos = c(CRAN = "https://cloud.r-project.org/"))
+library(DT)
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(ggplot2)
+library(readr)
+
+```
+
+# Introduction
+
+When working with data, you should expect to spend a good amount of time in the clean-up process, but it is not always 'messy' or unreadable.  For example, data can still be organized in a data-frame in a way that is readable, but at the same time it may not be useful in such presented formats.  In these cases, we may have to transpose the data-frame and re-organize to fit our needs.
+
+
+## Loading Data: Creating the Initial Data-Frame
+
+The data is loaded into a data-frame called 'majors_df'.
+
+```{r }
+rm(list = ls())
+
+majors_df <- data.frame(
+  c('NYU',NA,NA,'CUNY',NA, NA, 'NYIT', NA),
+  c('Declared','Undeclared',NA,'Declared','Undeclared',NA,'Declared','Undeclared'),
+  c(342,291,NA,807,227,NA,552,89),
+  c(57,122,NA,58,1206,NA,192,319),
+  c(915,582,NA,867,451,NA,1027,625),
+  c(377,151,NA,109,650,NA,21,235),
+  c(1569,257,NA,89,215,NA,1007,519),
+  c(601,95,NA,712,77,NA,811,62)
+)
+
+colnames(majors_df) <- c('','','Applied Mathematics','Physics','Computer Science','Data Science','Materials Science', 'Systems Engineering')
+
+#view current state of data-frame
+majors_df
+
+```
+
+## Loading Data: Writing the Data-Frame to a CSV File
+
+We can now write the 'majors_df' data-frame to a CSV file. Within the 'write.csv()' function, I specified the 'row.names' parameter to 'FALSE' to avoid creating non-blank row names. I also set the 'na' parameter to "" to replace all 'NA' values with blanks. The 'stringsAsFactors' parameter is set to 'FALSE' to avoid changing the character entries. At first glance it looks correct, but the data-frame still shows up with 'NA' values in some of the cells.
+
+```{r }
+
+#write to csv file
+write.csv(majors_df, "majors.csv", row.names = FALSE, na = "")
+
+#read from csv file into R
+majors_csv <- read.csv('majors.csv', stringsAsFactors = FALSE, check.names = FALSE)
+
+majors_csv
+
+```
+
+## Loading Data: Changing "NA" Values to Blanks
+
+To remove the remaining 'NA' values I subset the data-frame and set any value that 'is.na' to "". When calling the updated data, it seemed to have removed the blank row entirely. To confirm that this was not the case, I presented the data nicely using the 'datatable()' function.
+
+```{r }
+
+#change NA values to blank
+majors_csv[is.na(majors_csv)] <- ""
+
+#check updated data-frame
+majors_csv
+
+# Display the data frame nicely
+datatable(majors_csv)
+
+```
+
+## Loading Data: Changing the Altered Column Names
+
+The previous output looks almost perfect, but the first two columns were given default names, namely "Var.2" and "Var.3".  To avoid this, I set the 'options' parameter accordingly. We can now see that our data-frame is formatted exactly as we want it to be. As a double-check, I compared it to a screen shot of the actual table that was created in the CSV file. Here, I used Excel to view it. The tables look identical.
+
+```{r, out.width = "697.5px", out.height = "145.5px", fig.align='center'}
+
+#specify additional options
+datatable(majors_csv, options = list(columnDefs = list(list(targets = c(1, 2), title = ""))))
+
+```
+
+## Using Valid Column Names
+
+Before we can pivot, we need to change the column/variable names to a valid format. This means no white-spaces or special characters.
+
+\textbf{Before:}
+
+```{r }
+
+#check data frame again
+majors_csv
+
+```
+
+\textbf{After:}
+
+Here, I replace white-spaces with a period and labeled the first two columns that originally had blank titles as 'College' and 'Major Status'. For the blank row entries in the 'College' column, I labeled them according to the proper college.
+
+```{r }
+
+#
+colnames(majors_csv) <- c('College','Major.Status','Applied.Mathematics','Physics','Computer.Science','Data.Science','Materials.Science', 'Systems.Engineering')
+
+majors_csv$College[2] <- 'NYU'
+majors_csv$College[5] <- 'CUNY'
+majors_csv$College[8] <- 'NYIT'
+
+majors_csv
+
+```
+
+## Pivoting
+
+Now that all of the required data is loaded, we need to transform what we have so that it is readable to our liking.  In this case, this means pivoting the matrix and aggregating values and columns. To avoid gaps in our pivoted data, I remove the blank row before applying the 'pivot_longer()' function.
+
+```{r }
+
+majors_csv <- majors_csv[c(-3,-6), ]
+
+majors_csv
+
+p_majors <- pivot_longer(majors_csv,
+                           cols = c('Applied.Mathematics','Physics','Computer.Science','Data.Science','Materials.Science', 'Systems.Engineering'),
+                           names_to = "Major",
+                           values_to = "Student.Count")
+
+p_majors
+
+```
+
+## Changing Column Type
+
+We need to change the 'Student.Count' column to numeric values to perform mathematical operations. After doing so, we can group the data according to College, Major, and Major.Status, in that order.
+
+```{r }
+
+p_majors$Student.Count <- as.numeric(p_majors$Student.Count)
+
+p_majors
+
+#Aggregate data by major and college
+grouped_majors <- p_majors %>%
+  group_by(College, Major, Major.Status) %>%
+  summarize(Student.Count, .groups = 'drop')
+
+grouped_majors
+
+```
+
+## Condensing the Data
+
+As shown above, for each college there are duplicate entries for each major in order to match to either the 'Declared' or 'Undeclared' status. This gives us a data-frame with 36 rows. We can condense this down to just 18 rows by including the major/declaration status for each city on the same row by creating a 'Declared' column and an 'Undeclared' column.
+
+```{r }
+
+#present corresponding values for (declared) and (undeclared) side by side
+wide_majors <- grouped_majors %>%
+  pivot_wider(names_from = Major.Status,
+              values_from = Student.Count)
+
+wide_majors
+
+```
+
+## Creating New Columns (1)
+
+Now that we have data that is readable to our liking, we can create new columns to use for our analysis.  Here, I created a column for the percentage of declared majors relative to all, declared + undeclared, for the given majors and corresponding to a specific college.
+
+```{r }
+
+#create new column to show percentage of declared majors for each row
+wide_majors$pct_declared <- wide_majors$Declared / (wide_majors$Declared + wide_majors$Undeclared)
+
+wide_majors
+
+```
+
+## Creating New Columns (2)
+
+I decided to create two more columns for the mean of declared majors as well as the total number of declared + undeclared for each college, regardless of major.  This is to compute a percentage for the mean in the same way that I computed a percentage for the individual majors.
+
+```{r }
+
+mColl_dec <- wide_majors %>%
+  group_by(College) %>%
+  summarize(mean_declared = mean(Declared))
+
+#mColl_dec
+
+mDec_CUNY <- mColl_dec$mean_declared[1]
+mDec_NYIT <- mColl_dec$mean_declared[2]
+mDec_NYU <- mColl_dec$mean_declared[3]
+
+wide_majors$mean_declared <- NA
+
+wide_majors$mean_declared <- ifelse(wide_majors$College == "CUNY",mDec_CUNY, wide_majors$mean_declared)
+wide_majors$mean_declared <- ifelse(wide_majors$College == "NYIT", mDec_NYIT, wide_majors$mean_declared)
+wide_majors$mean_declared <- ifelse(wide_majors$College == "NYU", mDec_NYU, wide_majors$mean_declared)
+
+wide_majors
+
+```
+
+## Creating New Columns (3)
+
+Here I include columns for the total number of declared majors, total number of declared + undeclared, and declared percentages for the overall colleges. Then added a final column that calculates the mean across all majors of the percentages of declared majors for each college.
+
+```{r }
+
+mDec_total1 <- wide_majors %>%
+   group_by(College) %>%
+   summarize(declared_total = sum(Declared))
+
+mColl_total <- wide_majors %>%
+   group_by(College) %>%
+   summarize(total = sum(Declared, Undeclared))
+
+# mDec_total1
+# mColl_total
+
+mDec_CUNY <- mDec_total1$declared_total[1]
+mDec_NYIT <- mDec_total1$declared_total[2]
+mDec_NYU <- mDec_total1$declared_total[3]
+
+mTot_CUNY <- mColl_total$total[1]
+mTot_NYIT <- mColl_total$total[2]
+mTot_NYU <- mColl_total$total[3]
+
+wide_majors$declared_total <- NA
+wide_majors$total <- NA
+
+wide_majors$declared_total <- ifelse(wide_majors$College == "CUNY", mDec_CUNY, wide_majors$declared_total)
+wide_majors$declared_total <- ifelse(wide_majors$College == "NYIT", mDec_NYIT, wide_majors$declared_total)
+wide_majors$declared_total <- ifelse(wide_majors$College == "NYU", mDec_NYU, wide_majors$declared_total)
+
+wide_majors$total <- ifelse(wide_majors$College == "CUNY", mTot_CUNY, wide_majors$total)
+wide_majors$total <- ifelse(wide_majors$College == "NYIT", mTot_NYIT, wide_majors$total)
+wide_majors$total <- ifelse(wide_majors$College == "NYU", mTot_NYU, wide_majors$total)
+
+wide_majors$college_declared_pct <- wide_majors$declared_total / wide_majors$total
+
+wide_majors$pct_mean_declared <- NA
+
+wide_majors$pct_mean_declared <- wide_majors$mean_declared / wide_majors$total
+
+wide_majors
+
+```
+
+## Analysis
+
+In my analysis, I decided to find the sample standard deviation based on the percentage points that I computed for the individual majors and the percentages of the means.  I did this to compare the declared majors according to variation in the data set.
+
+```{r }
+
+sample_pct_sd <- wide_majors %>%
+   group_by(College) %>%
+   reframe(pct_declared, pct_mean_declared)
+
+sample_pct_sd$sq_diff <- (sample_pct_sd$pct_declared - sample_pct_sd$pct_mean_declared)^2
+
+
+sample_pct_sd1 <- sample_pct_sd %>%
+  group_by(College) %>%
+  summarize(pct_sd = sqrt(sum(sq_diff)/(6 - 1)))
+
+#sample_pct_sd1
+
+#standard deviation of delay percentages for ALASKA
+cuny_pct_sd <- sample_pct_sd1$pct_sd[1]
+
+#standard deviation of delay percentages for AM WEST
+nyit_pct_sd <- sample_pct_sd1$pct_sd[2]
+
+#standard deviation of delay percentages for AM WEST
+nyu_pct_sd <- sample_pct_sd1$pct_sd[3]
+
+#wide_majors
+
+declared_df <- data.frame(College = wide_majors$College,
+                 Major = wide_majors$Major,
+                 Declared = wide_majors$Declared,
+                 Pct_Declared = wide_majors$pct_declared,
+                 #Mean_Pct_Delay = wide_flights$pct_mean_delayed,
+                 #Pct_SD = round(sqrt(((wide_flights$pct_delayed - wide_flights$pct_mean_delayed)^2) / (wide_flights$total - 1)), 5),
+                 #Avg_Pct_SD = NA,
+                 Pct_SD = NA,
+                 College_Declared_Pct = wide_majors$college_declared_pct
+                 )
+
+declared_df$Pct_SD <- ifelse(wide_majors$College == "CUNY", cuny_pct_sd, declared_df$Pct_SD)
+declared_df$Pct_SD <- ifelse(wide_majors$College == "NYIT", nyit_pct_sd, declared_df$Pct_SD)
+declared_df$Pct_SD <- ifelse(wide_majors$College == "NYU", nyu_pct_sd, declared_df$Pct_SD)
+
+#write to csv
+write.csv(declared_df, 'major_analysis.csv')
+
+majors_analysis <- read.csv('major_analysis.csv')
+
+majors_analysis
+
+```
+
+## Grouping by Major
+
+The following code mimics the same process as above that was done for each college, but for majors. To avoid confusion, I gave these  data-frames to new assignments.
+
+
+```{r }
+
+mMaj_dec <- wide_majors %>%
+  group_by(Major) %>%
+  summarize(mean_declared = mean(Declared))
+
+wide_majors2 <- wide_majors
+#wide_majors2
+#mMaj_dec
+
+mDec_math <- mMaj_dec$mean_declared[1]
+mDec_cs <- mMaj_dec$mean_declared[2]
+mDec_ds <- mMaj_dec$mean_declared[3]
+mDec_ms <- mMaj_dec$mean_declared[4]
+mDec_p <- mMaj_dec$mean_declared[5]
+mDec_se <- mMaj_dec$mean_declared[6]
+
+wide_majors2$mean_declared <- NA
+
+wide_majors2$mean_declared <- ifelse(wide_majors2$Major == "Applied.Mathematics",mDec_math, wide_majors2$mean_declared)
+wide_majors2$mean_declared <- ifelse(wide_majors2$Major == "Computer.Science", mDec_cs, wide_majors2$mean_declared)
+wide_majors2$mean_declared <- ifelse(wide_majors2$Major == "Data.Science", mDec_ds, wide_majors2$mean_declared)
+wide_majors2$mean_declared <- ifelse(wide_majors2$Major == "Materials.Science",mDec_ms, wide_majors2$mean_declared)
+wide_majors2$mean_declared <- ifelse(wide_majors2$Major == "Physics", mDec_p, wide_majors2$mean_declared)
+wide_majors2$mean_declared <- ifelse(wide_majors2$Major == "Systems.Engineering", mDec_se, wide_majors2$mean_declared)
+
+wide_majors2
+
+##############
+
+mDec_total2 <- wide_majors %>%
+   group_by(Major) %>%
+   summarize(declared_total = sum(Declared))
+
+mColl_total1 <- wide_majors %>%
+   group_by(Major) %>%
+   summarize(total = sum(Declared, Undeclared))
+
+# mDec_total2
+# mColl_total1
+
+mDec_math <- mDec_total2$declared_total[1]
+mDec_cs <- mDec_total2$declared_total[2]
+mDec_ds <- mDec_total2$declared_total[3]
+mDec_ms <- mDec_total2$declared_total[4]
+mDec_p <- mDec_total2$declared_total[5]
+mDec_se <- mDec_total2$declared_total[6]
+
+mTot_math <- mColl_total1$total[1]
+mTot_cs <- mColl_total1$total[2]
+mTot_ds <- mColl_total1$total[3]
+mTot_ms <- mColl_total1$total[4]
+mTot_p <- mColl_total1$total[5]
+mTot_se <- mColl_total1$total[6]
+
+wide_majors2$declared_total <- NA
+wide_majors2$total <- NA
+
+wide_majors2$declared_total <- ifelse(wide_majors2$Major == "Applied.Mathematics", mDec_math, wide_majors2$declared_total)
+wide_majors2$declared_total <- ifelse(wide_majors2$Major == "Computer.Science", mDec_cs, wide_majors2$declared_total)
+wide_majors2$declared_total <- ifelse(wide_majors2$Major == "Data.Science", mDec_ds, wide_majors2$declared_total)
+wide_majors2$declared_total <- ifelse(wide_majors2$Major == "Materials.Science", mDec_ms, wide_majors2$declared_total)
+wide_majors2$declared_total <- ifelse(wide_majors2$Major == "Physics", mDec_p, wide_majors2$declared_total)
+wide_majors2$declared_total <- ifelse(wide_majors2$Major == "Systems.Engineering", mDec_se, wide_majors2$declared_total)
+
+wide_majors2$total <- ifelse(wide_majors2$Major == "Applied.Mathematics", mTot_math, wide_majors2$total)
+wide_majors2$total <- ifelse(wide_majors2$Major == "Computer.Science", mTot_cs, wide_majors2$total)
+wide_majors2$total <- ifelse(wide_majors2$Major == "Data.Science", mTot_ds, wide_majors2$total)
+wide_majors2$total <- ifelse(wide_majors2$Major == "Materials.Science", mTot_ms, wide_majors2$total)
+wide_majors2$total <- ifelse(wide_majors2$Major == "Physics", mTot_p, wide_majors2$total)
+wide_majors2$total <- ifelse(wide_majors2$Major == "Systems.Engineering", mTot_se, wide_majors2$total)
+
+wide_majors2$major_declared_pct <- wide_majors2$declared_total / wide_majors2$total
+
+wide_majors2$pct_mean_declared <- NA
+
+wide_majors2$pct_mean_declared <- wide_majors2$mean_declared / wide_majors2$total
+
+#wide_majors2
+
+##############
+
+sample_pct_sd3 <- wide_majors2 %>%
+   group_by(Major) %>%
+   reframe(pct_declared, pct_mean_declared)
+
+sample_pct_sd3$sq_diff2 <- (sample_pct_sd3$pct_declared - sample_pct_sd3$pct_mean_declared)^2
+
+sample_pct_sd4 <- sample_pct_sd3 %>%
+  group_by(Major) %>%
+  summarize(pct_sd = sqrt(sum(sq_diff2)/(6 - 1)))
+
+# sample_pct_sd3
+# sample_pct_sd4
+
+#standard deviation of delay percentages for ALASKA
+math_pct_sd <- sample_pct_sd4$pct_sd[1]
+
+#standard deviation of delay percentages for AM WEST
+cs_pct_sd <- sample_pct_sd4$pct_sd[2]
+
+#standard deviation of delay percentages for AM WEST
+ds_pct_sd <- sample_pct_sd4$pct_sd[3]
+
+#standard deviation of delay percentages for ALASKA
+ms_pct_sd <- sample_pct_sd4$pct_sd[4]
+
+#standard deviation of delay percentages for AM WEST
+p_pct_sd <- sample_pct_sd4$pct_sd[5]
+
+#standard deviation of delay percentages for AM WEST
+se_pct_sd <- sample_pct_sd4$pct_sd[6]
+
+#wide_majors2
+
+declared_df2 <- data.frame(College = wide_majors2$College,
+                 Major = wide_majors2$Major,
+                 Declared = wide_majors2$Declared,
+                 Pct_Declared = wide_majors2$pct_declared,
+                 #Mean_Pct_Delay = wide_flights$pct_mean_delayed,
+                 #Pct_SD = round(sqrt(((wide_flights$pct_delayed - wide_flights$pct_mean_delayed)^2) / (wide_flights$total - 1)), 5),
+                 #Avg_Pct_SD = NA,
+                 Pct_SD = NA,
+                 Major_Declared_Pct = wide_majors2$major_declared_pct
+                 )
+
+declared_df2$Pct_SD <- ifelse(wide_majors2$Major == "Applied.Mathematics", math_pct_sd, declared_df2$Pct_SD)
+declared_df2$Pct_SD <- ifelse(wide_majors2$Major == "Computer.Science", cs_pct_sd, declared_df2$Pct_SD)
+declared_df2$Pct_SD <- ifelse(wide_majors2$Major == "Data.Science", ds_pct_sd, declared_df2$Pct_SD)
+declared_df2$Pct_SD <- ifelse(wide_majors2$Major == "Materials.Science", ms_pct_sd, declared_df2$Pct_SD)
+declared_df2$Pct_SD <- ifelse(wide_majors2$Major == "Physics", p_pct_sd, declared_df2$Pct_SD)
+declared_df2$Pct_SD <- ifelse(wide_majors2$Major == "Systems.Engineering", se_pct_sd, declared_df2$Pct_SD)
+
+#write to csv
+write.csv(declared_df2, 'major_analysis2.csv')
+
+majors_analysis2 <- read.csv('major_analysis2.csv')
+
+majors_analysis2
+
+```
+
+## Visualizing Declared Percentages with Error Bars
+
+The graphs below show the percentages of declared majors in three different ways. All visuals include error bars that show the variability of the data.
+
+### (1) Grouped by College
+
+Here we see the colleges grouped in three graphs, each with the declared percentages of the individual majors.
+
+```{r }
+
+ggplot(majors_analysis2, aes(x = Pct_Declared, y = Major, fill = College)) +
+  facet_wrap(~ College) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(xmin = Pct_Declared - Pct_SD, xmax = Pct_Declared + Pct_SD), width = 0.2) +
+  labs(
+    title = "Declared Percentage by Major",
+    x = "Percentage",
+    y = "Major"
+  )   
+
+```
+
+### (2) Grouped by Major
+
+Here we see the cities grouped in five graphs. Each shows the declared percentages of the individual colleges.
+
+```{r }
+
+ggplot(majors_analysis, aes(x = Pct_Declared, y = College, fill = Major)) +
+  facet_wrap(~ Major) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(xmin = Pct_Declared - Pct_SD, xmax = Pct_Declared + Pct_SD), width = 0.2) +
+  labs(
+    title = "Declared Percentage by College",
+    x = "Percentage",
+    y = "College"
+  )   
+
+```
+
+## Overall Declared Percentage vs College
+
+Below I compared the overall declared majors for each college and used a bar graph to compare. It is clear that                Airlines has CUNY has the smallest major declaration rate relative to their total number of students across all majors.
+
+```{r }
+
+dec_group <- majors_analysis %>%
+   group_by(College) %>%
+   summarize(coll_declared_p = mean(College_Declared_Pct))
+
+ggplot(dec_group, aes(x = College, y = coll_declared_p, fill = College)) + 
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Overall Declared Percentage by College",
+    x = "College",
+    y = "Percentage"
+  )   
+
+```
+
+## Individual Declared Percentage vs College (color filered by major)
+
+When breaking down the percentage comparison by major, I visualized it as (1) a single stacked graph with the information for all majors and (2) as separate graphs for each major. In either case, we see a significant difference in declared percentages across colleges.
+
+### (1) Stacked (One Graph)
+
+Here the graph is visually appealing, but may be harder to compare as the bars representing the declared percentage for each major are not properly aligned side by side.
+
+```{r }
+
+ggplot(majors_analysis, aes(x = College, y = Pct_Declared, fill = Major)) + 
+  geom_bar(stat = "identity", position = "stack") +
+  labs(
+    title = "Individual Declared Percentage vs College (Stacked)",
+    x = "College",
+    y = "Percentage"
+  )   
+
+```
+
+### (2) Facet Wrap (Separate Graphs)
+
+Here the separate graphs represent each \textit{major} and within each graph is a comparison of declared percentages by \textit{college}. The individual graphs allow easier comparison.
+
+```{r }
+
+ggplot(majors_analysis, aes(x = College, y = Pct_Declared, fill = Major)) + 
+  facet_wrap(~ Major) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Individual Declared Percentage vs College (Separated)",
+    x = "College",
+    y = "Percentage"
+  )   
+
+```
+
+## Declared Percentage vs Major (color filtered by College)
+
+I likewise visualized it by comparing the declared percentages of each major and filled by college. I also swapped the axes for better readability.
+
+### (1) Stacked (One Graph)
+
+```{r }
+
+ggplot(majors_analysis, aes(x = Pct_Declared, y = Major, fill = College)) +
+  geom_bar(stat = 'identity') +
+  labs(
+    title = "Declared Percentage vs Major (Stacked)",
+    x = "Percentage",
+    y = "Major"
+  ) 
+
+```
+
+### (2) Facet Wrap (Separate Graphs)
+
+Here the separate graphs represent each \textit{college} and within each graph is a comparison of their declared percentages by \textit{major}.
+
+```{r }
+
+ggplot(majors_analysis, aes(x = Pct_Declared, y = Major, fill = College)) +
+  facet_wrap(~ College) +
+  geom_bar(stat = 'identity') +
+  labs(
+    title = "Declared Percentage vs Major (Separated)",
+    x = "Percentage",
+    y = "Major"
+  ) 
+
+```
+
+## Conclusion
+
+My analysis focused on comparing the spread of the data according to airline as well as comparing percentages of major declarations.  In comparing the standard deviations of overall declared major percentages for each school, we observe that CUNY has a standard deviation of 0.5565744, NYIT has standard deviation of 0.6114432, and NYU has a standard deviation of 0.6178946. This indicates that CUNY has more consistency in the percentage of declared majors compared to NYIT and NYU. When comparing the actual percentages of declared majors, whether by college overall or individual majors, it seems that CUNY has a smaller declaration rate across the board. Based on this analysis, CUNY students seem to be less decisive in terms of deciding on a major and with a smaller standard deviation, it shows more consistency in this regard.
+

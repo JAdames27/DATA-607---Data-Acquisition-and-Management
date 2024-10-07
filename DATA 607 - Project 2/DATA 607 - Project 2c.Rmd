@@ -1,0 +1,434 @@
+---
+title: "DATA 607 - Project 2: Data Set 3"
+author: "Julian Adames-Ng"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+#install and load libraries
+#install.packages('RMySQL', repos='http://cran.us.r-project.org')
+#install.packages('dplyr')
+#install.packages('tidyr')
+#install.packages('DT')
+
+options(repos = c(CRAN = "https://cloud.r-project.org/"))
+library(DT)
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(ggplot2)
+
+```
+
+# Introduction
+
+When working with data, you should expect to spend a good amount of time in the clean-up process, but it is not always 'messy' or unreadable.  For example, data can still be organized in a data-frame in a way that is readable, but at the same time it may not be useful in such presented formats.  In these cases, we may have to transpose the data-frame and re-organize to fit our needs.
+
+
+## Loading Data: Creating the Initial Data-Frame
+
+The data is loaded into a data-frame called 'movies_df'.
+
+```{r }
+rm(list = ls())
+
+movies_df <- data.frame(
+  c('Young',NA,NA,'Old',NA),
+  c('Liked','Disliked',NA,'Liked','Disliked'),
+  c(23,77,NA,58,42),
+  c(91,9,NA,14,86),
+  c(76,24,NA,37,63)
+)
+
+colnames(movies_df) <- c('','','Iron Man','Titanic','Legally Blonde')
+
+#view current state of data-frame
+movies_df
+
+```
+
+## Loading Data: Writing the Data-Frame to a CSV File
+
+We can now write the 'movies_df' data-frame to a CSV file. Within the 'write.csv()' function, I specified the 'row.names' parameter to 'FALSE' to avoid creating non-blank row names. I also set the 'na' parameter to "" to replace all 'NA' values with blanks. The 'stringsAsFactors' parameter is set to 'FALSE' to avoid changing the character entries. At first glance it looks correct, but the data-frame still shows up with 'NA' values in some of the cells.
+
+```{r }
+
+#write to csv file
+write.csv(movies_df, "movies.csv", row.names = FALSE, na = "")
+
+#read from csv file into R
+movies_csv <- read.csv('movies.csv', stringsAsFactors = FALSE, check.names = FALSE)
+
+movies_csv
+
+```
+
+## Loading Data: Changing "NA" Values to Blanks
+
+To remove the remaining 'NA' values I subset the data-frame and set any value that 'is.na' to "". When calling the updated data, it seemed to have removed the blank row entirely. To confirm that this was not the case, I presented the data nicely using the 'datatable()' function.
+
+```{r }
+
+#change NA values to blank
+movies_csv[is.na(movies_csv)] <- ""
+
+#check updated data-frame
+movies_csv
+
+# Display the data frame nicely
+datatable(movies_csv)
+
+```
+
+## Loading Data: Changing the Altered Column Names
+
+The previous output looks almost perfect, but the first two columns were given default names, namely "Var.2" and "Var.3".  To avoid this, I set the 'options' parameter accordingly. We can now see that our data-frame is formatted exactly as we want it to be.
+```{r, out.width = "697.5px", out.height = "145.5px", fig.align='center'}
+
+#specify additional options
+datatable(movies_csv, options = list(columnDefs = list(list(targets = c(1, 2), title = ""))))
+
+```
+
+## Using Valid Column Names
+
+Before we can pivot, we need to change the column/variable names to a valid format. This means no white-spaces or special characters.
+
+\textbf{Before:}
+
+```{r }
+
+#check data frame again
+movies_csv
+
+```
+
+\textbf{After:}
+
+Here, I replace white-spaces with a period and labeled the first two columns that originally had blank titles as 'Age_Group' and 'Preference'. For the blank row entries in the 'Age_Group' column, I labeled them according to the relevant age group.
+
+```{r }
+
+colnames(movies_csv) <- c('Age_Group','Preference','Iron.Man','Titanic','Legally.Blonde')
+
+movies_csv$Age_Group[2] <- 'Young'
+movies_csv$Age_Group[5] <- 'Old'
+
+movies_csv
+
+```
+
+## Pivoting
+
+Now that all of the required data is loaded, we need to transform what we have so that it is readable to our liking.  In this case, this means pivoting the matrix and aggregating values and columns. To avoid gaps in our pivoted data, I remove the blank row before applying the 'pivot_longer()' function.
+
+```{r }
+
+movies_csv <- movies_csv[-3, ]
+
+p_movies <- pivot_longer(movies_csv,
+                           cols = c('Iron.Man','Titanic','Legally.Blonde'),
+                           names_to = "Movie",
+                           values_to = "Ratings.Count")
+
+p_movies
+
+```
+
+## Changing Column Type
+
+We need to change the 'Ratings.Count' column to numeric values to perform mathematical operations. After doing so, we can group the data according to Age_Group, Movie, and Preference, in that order.
+
+```{r }
+
+p_movies$Ratings.Count <- as.numeric(p_movies$Ratings.Count)
+
+#Aggregate data by city and airline
+grouped_movies <- p_movies %>%
+  group_by(Age_Group, Movie, Preference) %>%
+  summarize(Ratings.Count, .groups = 'drop')
+
+grouped_movies
+
+```
+
+## Condensing the Data
+
+As shown above, for each age group there are duplicate entries for each movie in order to match to either the 'Liked' or 'Disliked' preference. This gives us a data-frame with 12 rows. We can condense this down to just 6 rows by including the preference for each movie on the same row by creating a 'Liked' column and a 'Disliked' column.
+
+```{r }
+
+#present corresponding values for (on time) and (delayed) side by side
+wide_movies <- grouped_movies %>%
+  pivot_wider(names_from = Preference,
+              values_from = Ratings.Count)
+
+wide_movies
+
+```
+
+## Creating New Columns (1)
+
+Now that we have data that is readable to our liking, we can create new columns to use for our analysis.  Here, I created a column for the percentage of liked films relative to all ratings of each movie and corresponding to a specific age group.
+
+```{r }
+
+#create new column to show percentage of delayed flights for each row
+wide_movies$pct_liked <- wide_movies$Liked / (wide_movies$Disliked + wide_movies$Liked)
+
+wide_movies
+
+```
+
+## Creating New Columns (2)
+
+I decided to create two more columns for the mean of liked movies as well as the total number of ratings for each age group, regardless of movie.  This is to compute a percentage for the mean in the same way that I computed a percentage for the individual movies.
+
+```{r }
+
+mAge_liked <- wide_movies %>%
+  group_by(Age_Group) %>%
+  summarize(mean_liked = mean(Liked))
+
+#mAge_liked
+
+mLiked_Old <- mAge_liked$mean_liked[1]
+mLiked_Young <- mAge_liked$mean_liked[2]
+
+wide_movies$mean_liked <- NA
+
+wide_movies$mean_liked <- ifelse(wide_movies$Age_Group == "Old", mLiked_Old, wide_movies$mean_liked)
+wide_movies$mean_liked <- ifelse(wide_movies$Age_Group == "Young", mLiked_Young, wide_movies$mean_liked)
+
+wide_movies
+
+```
+
+## Creating New Columns (3)
+
+Here I include columns for the total number of liked films, total number of ratings, and liked movie percentages for the overall age groups. Then added a final column that calculates the mean across all movies of the percentages of liked movies for each age group.
+
+```{r }
+
+mAge_total1 <- wide_movies %>%
+   group_by(Age_Group) %>%
+   summarize(liked_total = sum(Liked))
+
+mAge_total <- wide_movies %>%
+   group_by(Age_Group) %>%
+   summarize(total = sum(Liked, Disliked))
+
+mAge_total1
+mAge_total
+
+mlike_old <- mAge_total1$liked_total[1]
+mlike_young <- mAge_total1$liked_total[2]
+
+mTot_old <- mAge_total$total[1]
+mTot_young <- mAge_total$total[2]
+
+wide_movies$liked_total <- NA
+wide_movies$total <- NA
+
+wide_movies$liked_total <- ifelse(wide_movies$Age_Group == "Old", mlike_old, wide_movies$liked_total)
+wide_movies$liked_total <- ifelse(wide_movies$Age_Group == "Young", mlike_young, wide_movies$liked_total)
+
+wide_movies$total <- ifelse(wide_movies$Age_Group == "Old", mTot_old, wide_movies$total)
+wide_movies$total <- ifelse(wide_movies$Age_Group == "Young", mTot_young, wide_movies$total)
+
+wide_movies$age_liked_pct <- wide_movies$liked_total / wide_movies$total
+
+wide_movies$pct_mean_liked <- NA
+
+wide_movies$pct_mean_liked <- wide_movies$mean_liked / wide_movies$total
+
+wide_movies
+
+
+```
+
+## Analysis
+
+In my analysis, I decided to find the sample standard deviation based on the percentage points that I computed for the individual movies and the percentages of the means.  I did this to compare the liked ratings according to variation in the data set.
+
+```{r }
+
+sample_pct_sd <- wide_movies %>%
+   group_by(Age_Group) %>%
+   reframe(pct_liked, pct_mean_liked)
+
+sample_pct_sd$sq_diff <- (sample_pct_sd$pct_liked - sample_pct_sd$pct_mean_liked)^2
+
+
+sample_pct_sd1 <- sample_pct_sd %>%
+  group_by(Age_Group) %>%
+  summarize(pct_sd = sqrt(sum(sq_diff)/(5 - 1)))
+
+#sample_pct_sd1
+
+#standard deviation of delay percentages for old people
+old_pct_sd <- sample_pct_sd1$pct_sd[1]
+
+#standard deviation of delay percentages for young people
+young_pct_sd <- sample_pct_sd1$pct_sd[2]
+
+liked_df <- data.frame(Age_Group = wide_movies$Age_Group,
+                 Movie = wide_movies$Movie,
+                 Liked = wide_movies$Liked,
+                 Pct_Liked = wide_movies$pct_liked,
+                 #Mean_Pct_Delay = wide_flights$pct_mean_delayed,
+                 #Pct_SD = round(sqrt(((wide_flights$pct_delayed - wide_flights$pct_mean_delayed)^2) / (wide_flights$total - 1)), 5),
+                 #Avg_Pct_SD = NA,
+                 Pct_SD = NA,
+                 Age_Liked_Pct = wide_movies$age_liked_pct
+                 )
+
+liked_df$Pct_SD <- ifelse(wide_movies$Age_Group == "Old", old_pct_sd, liked_df$Pct_SD)
+liked_df$Pct_SD <- ifelse(wide_movies$Age_Group == "Young", young_pct_sd, liked_df$Pct_SD)
+
+#write to csv
+write.csv(liked_df, 'movie_analysis.csv')
+
+movies_analysis <- read.csv('movie_analysis.csv')
+
+movies_analysis
+
+```
+
+## Visualizing Liked Percentages with Error Bars
+
+The graphs below show the percentages of liked movies in two different ways. Both visuals include error bars that show the variability of the data.
+
+### (1) Grouped by Age
+
+Here we see the age groups bunched in two graphs, each with the liked percentages of the individual movies.
+
+```{r }
+
+ggplot(movies_analysis, aes(x = Pct_Liked, y = Movie, fill = Age_Group)) +
+  facet_wrap(~ Age_Group) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(xmin = Pct_Liked - Pct_SD, xmax = Pct_Liked + Pct_SD), width = 0.2) +
+  labs(
+    title = "Liked Percentage by Movie",
+    x = "Percentage",
+    y = "Movie"
+  )   
+
+```
+
+### (2) Grouped by Movie
+
+Here we see the movies grouped in five graphs. Each shows the liked percentages of the individual age groups.
+
+```{r }
+
+ggplot(movies_analysis, aes(x = Pct_Liked, y = Age_Group, fill = Movie)) +
+  facet_wrap(~ Movie) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(xmin = Pct_Liked - Pct_SD, xmax = Pct_Liked + Pct_SD), width = 0.2) +
+  labs(
+    title = "Liked Percentage by Age Group",
+    x = "Percentage",
+    y = "Age Group"
+  )   
+
+```
+
+## Overall Liked Percentage vs Age Group
+
+Below I compared the overall liked ratings for each age group and used a bar graph to compare. It is clear that significantly less older people liked movies relative to the total number of ratings across all movies.
+
+```{r }
+
+liked_group <- movies_analysis %>%
+   group_by(Age_Group) %>%
+   summarize(age_liked_p = mean(Age_Liked_Pct))
+
+ggplot(liked_group, aes(x = Age_Group, y = age_liked_p, fill = Age_Group)) + 
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Overall Liked Percentage by Age Group",
+    x = "Age Group",
+    y = "Percentage"
+  )   
+
+```
+
+## Individual Liked Percentage vs Age Group (color filered by movie)
+
+When breaking down the percentage comparison by movie, I visualized it as (1) a single stacked graph with the information for all movie and (2) as separate graphs for each movie. In either case, we see a significant difference in preferences across age groups.
+
+### (1) Stacked (One Graph)
+
+Here the graph is visually appealing, but may be harder to compare as the bars representing the preference for each movie are not properly aligned side by side.
+
+```{r }
+
+ggplot(movies_analysis, aes(x = Age_Group, y = Pct_Liked, fill = Movie)) + 
+  geom_bar(stat = "identity", position = "stack") +
+  labs(
+    title = "Individual Like Percentage vs Age Group (Stacked)",
+    x = "Age Group",
+    y = "Percentage"
+  )   
+
+```
+
+### (2) Facet Wrap (Separate Graphs)
+
+Here the separate graphs represent each \textit{movie} and within each graph is a comparison of their preferences by \textit{age group}. The individual graphs allow easier comparison.
+
+```{r }
+
+ggplot(movies_analysis, aes(x = Age_Group, y = Pct_Liked, fill = Movie)) + 
+  facet_wrap(~ Movie) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Individual Liked Percentage vs Age Group (Separated)",
+    x = "Age Group",
+    y = "Percentage"
+  )   
+
+```
+
+## Like Percentage vs Movie (color filtered by Age Group)
+
+I likewise visualized it by comparing the like percentages of each movie and filled by age group. I also swapped the axes for better readability.
+
+### (1) Stacked (One Graph)
+
+```{r }
+
+ggplot(movies_analysis, aes(x = Pct_Liked, y = Movie, fill = Age_Group)) +
+  geom_bar(stat = 'identity') +
+  labs(
+    title = "Liked Percentage vs Movie (Stacked)",
+    x = "Percentage",
+    y = "Movie"
+  ) 
+
+```
+
+### (2) Facet Wrap (Separate Graphs)
+
+Here the separate graphs represent each \textit{age group} and within each graph is a comparison of their preference by \textit{movie}.
+
+```{r }
+
+ggplot(movies_analysis, aes(x = Pct_Liked, y = Movie, fill = Age_Group)) +
+  facet_wrap(~ Age_Group) +
+  geom_bar(stat = 'identity') +
+  labs(
+    title = "Liked Percentage vs Movie (Separated)",
+    x = "Percentage",
+    y = "Movie"
+  ) 
+
+```
+
+## Conclusion
+
+My analysis focused on comparing the spread of the data according to age group as well as comparing percentages of preference.  In comparing the standard deviations of overall preferred movie percentages for each age group, we observe that older raters had a standard deviation of 0.2611903, while younger raters had a standard deviation of 0.4444326. This indicates that older raters were more consistent in their movie preferences. When comparing the actual percentages of liked movies, whether by age group overall or individual movies, we see that older people liked movies less than younger people did. Based on this analysis, older people seemed to like movies less and were more assertive in their preference.

@@ -1,0 +1,432 @@
+---
+title: "DATA 607 - Project 2: Data Set 1 (Assignment #4 Resubmission)"
+author: "Julian Adames-Ng"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+#install and load libraries
+#install.packages('RMySQL', repos='http://cran.us.r-project.org')
+#install.packages('dplyr')
+#install.packages('tidyr')
+#install.packages('DT')
+
+options(repos = c(CRAN = "https://cloud.r-project.org/"))
+library(DT)
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(ggplot2)
+
+```
+
+# Introduction
+
+When working with data, you should expect to spend a good amount of time in the clean-up process, but it is not always 'messy' or unreadable.  For example, data can still be organized in a data-frame in a way that is readable, but at the same time it may not be useful in such presented formats.  In these cases, we may have to transpose the data-frame and re-organize to fit our needs.
+
+
+## Loading Data: Creating the Initial Data-Frame
+
+The data is loaded into a data-frame called 'flights_df'.
+
+```{r }
+rm(list = ls())
+
+flights_df <- data.frame(
+  c('ALASKA',NA,NA,'AM WEST',NA),
+  c('on time','delayed',NA,'on time','delayed'),
+  c(497,62,NA,694,117),
+  c(221,12,NA,4840,415),
+  c(212,20,NA,383,65),
+  c(503,102,NA,320,129),
+  c(1841,305,NA,201,61)
+)
+
+colnames(flights_df) <- c('','','Los Angeles','Phoenix','San Diego','San Francisco','Seattle')
+
+#view current state of data-frame
+flights_df
+
+```
+
+## Loading Data: Writing the Data-Frame to a CSV File
+
+We can now write the 'flights_df' data-frame to a CSV file. Within the 'write.csv()' function, I specified the 'row.names' parameter to 'FALSE' to avoid creating non-blank row names. I also set the 'na' parameter to "" to replace all 'NA' values with blanks. The 'stringsAsFactors' parameter is set to 'FALSE' to avoid changing the character entries. At first glance it looks correct, but the data-frame still shows up with 'NA' values in some of the cells.
+
+```{r }
+
+#write to csv file
+write.csv(flights_df, "flights.csv", row.names = FALSE, na = "")
+
+#read from csv file into R
+flights_csv <- read.csv('flights.csv', stringsAsFactors = FALSE, check.names = FALSE)
+
+flights_csv
+
+```
+
+## Loading Data: Changing "NA" Values to Blanks
+
+To remove the remaining 'NA' values I subsetted the data-frame and set any value that 'is.na' to "". When calling the updated data, it seemed to have removed the blank row entirely. To confirm that this was not the case, I presented the data nicely using the 'datatable()' function.
+
+```{r }
+
+#change NA values to blank
+flights_csv[is.na(flights_csv)] <- ""
+
+#check updated data-frame
+flights_csv
+
+# Display the data frame nicely
+datatable(flights_csv)
+
+```
+
+## Loading Data: Changing the Altered Column Names
+
+The previous output looks almost perfect, but the first two columns were given default names, namely "Var.2" and "Var.3".  To avoid this, I set the 'options' parameter accordingly. We can now see that our data-frame is formatted exactly as we want it to be. 
+
+```{r, out.width = "697.5px", out.height = "145.5px", fig.align='center'}
+
+#specify additional options
+datatable(flights_csv, options = list(columnDefs = list(list(targets = c(1, 2), title = ""))))
+
+```
+
+## Using Valid Column Names
+
+Before we can pivot, we need to change the column/variable names to a valid format. This means no white-spaces or special characters.
+
+\textbf{Before:}
+
+```{r }
+
+#check data frame again
+flights_csv
+
+```
+
+\textbf{After:}
+
+Here, I replace white-spaces with a period and labeled the first two columns that originally had blank titles as 'Airline' and 'Status'. For the blank row entries in the 'Airline' column, labeled them according to the proper airline.
+
+```{r }
+
+#
+colnames(flights_csv) <- c('Airline','Status','Los.Angeles','Phoenix','San.Diego','San.Francisco','Seattle')
+
+flights_csv$Airline[2] <- 'ALASKA'
+flights_csv$Airline[5] <- 'AM WEST'
+
+flights_csv
+
+```
+
+## Pivoting
+
+Now that all of the required data is loaded, we need to transform what we have so that it is readable to our liking.  In this case, this means pivoting the matrix and aggregating values and columns. To avoid gaps in our pivoted data, I remove the blank row before applying the 'pivot_longer()' function.
+
+```{r }
+
+flights_csv <- flights_csv[-3, ]
+
+p_flights <- pivot_longer(flights_csv,
+                           cols = c('Los.Angeles','Phoenix','San.Diego','San.Francisco','Seattle'),
+                           names_to = "City",
+                           values_to = "Flight.Count")
+
+p_flights
+
+```
+
+## Changing Column Type
+
+We need to change the 'Flight.Count' column to numeric values to perform mathematical operations. After doing so, we can group the data according to Airline, City, and Status, in that order.
+
+```{r }
+
+p_flights$Flight.Count <- as.numeric(p_flights$Flight.Count)
+
+#Aggregate data by city and airline
+grouped_flights <- p_flights %>%
+  group_by(Airline, City, Status) %>%
+  summarize(Flight.Count, .groups = 'drop')
+
+grouped_flights
+
+```
+
+## Condensing the Data
+
+As shown above, for each airline there are duplicate entries for each city in order to match to either the 'delayed' or 'on time' status. This gives us a data-frame with 20 rows. We can condense this down to just 10 rows by including the flight status for each city on the same row by creating a 'delayed' column and an 'on time' column. I relabeled the resulting 'on time' column to 'on.time' since the former label used a white-space.
+
+```{r }
+
+#present corresponding values for (on time) and (delayed) side by side
+wide_flights <- grouped_flights %>%
+  pivot_wider(names_from = Status,
+              values_from = Flight.Count)
+
+colnames(wide_flights)[4] <- 'on.time'
+
+wide_flights
+
+```
+
+## Creating New Columns (1)
+
+Now that we have data that is readable to our liking, we can create new columns to use for our analysis.  Here, I created a column for the percentage of delayed flights relative to all flights at the given destination city and corresponding to a specific airline.
+
+```{r }
+
+#create new column to show percentage of delayed flights for each row
+wide_flights$pct_delayed <- wide_flights$delayed / (wide_flights$delayed + wide_flights$on.time)
+
+wide_flights
+
+```
+
+## Creating New Columns (2)
+
+I decided to create two more columns for the mean of delayed flights as well as the total number of flights for each airline, regardless of destination.  This is to compute a percentage for the mean in the same way that I computed a percentage for the individual cities.
+
+```{r }
+
+mAir_delay <- wide_flights %>%
+  group_by(Airline) %>%
+  summarize(mean_delayed = mean(delayed))
+
+mDelay_AMWest <- mAir_delay$mean_delayed[1]
+mDelay_Alaska <- mAir_delay$mean_delayed[2]
+
+wide_flights$mean_delay <- NA
+
+wide_flights$mean_delay <- ifelse(wide_flights$Airline == "AM WEST", mDelay_AMWest, wide_flights$mean_delay)
+wide_flights$mean_delay <- ifelse(wide_flights$Airline == "ALASKA", mDelay_Alaska, wide_flights$mean_delay)
+
+wide_flights
+
+```
+
+## Creating New Columns (3)
+
+Here I include columns for the total number of delayed flights, total number of flights, and delay percentages for the overall airlines. Then added a final column that calculates the mean across all cities of the percentages of delayed flights for each airline.
+
+```{r }
+
+mAir_total1 <- wide_flights %>%
+   group_by(Airline) %>%
+   summarize(delay_total = sum(delayed))
+
+mAir_total <- wide_flights %>%
+   group_by(Airline) %>%
+   summarize(total = sum(delayed, on.time))
+
+mDel_AMWest <- mAir_total1$delay_total[2]
+mDel_Alaska <- mAir_total1$delay_total[1]
+
+mTot_AMWest <- mAir_total$total[1]
+mTot_Alaska <- mAir_total$total[2]
+
+wide_flights$delay_total <- NA
+wide_flights$total <- NA
+
+wide_flights$delay_total <- ifelse(wide_flights$Airline == "AM WEST", mDel_AMWest, wide_flights$delay_total)
+wide_flights$delay_total <- ifelse(wide_flights$Airline == "ALASKA", mDel_Alaska, wide_flights$delay_total)
+
+wide_flights$total <- ifelse(wide_flights$Airline == "AM WEST", mTot_AMWest, wide_flights$total)
+wide_flights$total <- ifelse(wide_flights$Airline == "ALASKA", mTot_Alaska, wide_flights$total)
+
+wide_flights$airline_delay_pct <- wide_flights$delay_total / wide_flights$total
+
+wide_flights$pct_mean_delayed <- NA
+
+wide_flights$pct_mean_delayed <- wide_flights$mean_delay / wide_flights$total
+
+wide_flights
+
+
+```
+
+## Analysis
+
+In my analysis, I decided to find the sample standard deviation based on the percentage points that I computed for the individual cities and the percentages of the means.  I did this to compare the delays according variation in the data set.
+
+```{r }
+
+sample_pct_sd <- wide_flights %>%
+   group_by(Airline) %>%
+   reframe(pct_delayed, pct_mean_delayed)
+
+sample_pct_sd$sq_diff <- (sample_pct_sd$pct_delayed - sample_pct_sd$pct_mean_delayed)^2
+
+
+sample_pct_sd1 <- sample_pct_sd %>%
+  group_by(Airline) %>%
+  summarize(pct_sd = sqrt(sum(sq_diff)/(5 - 1)))
+
+#standard deviation of delay percentages for ALASKA
+alaska_pct_sd <- sample_pct_sd1$pct_sd[1]
+
+#standard deviation of delay percentages for AM WEST
+amWest_pct_sd <- sample_pct_sd1$pct_sd[2]
+
+delayed_df <- data.frame(Airline = wide_flights$Airline,
+                 City = wide_flights$City,
+                 Delayed = wide_flights$delayed,
+                 Pct_Delay = wide_flights$pct_delayed,
+                 #Mean_Pct_Delay = wide_flights$pct_mean_delayed,
+                 #Pct_SD = round(sqrt(((wide_flights$pct_delayed - wide_flights$pct_mean_delayed)^2) / (wide_flights$total - 1)), 5),
+                 #Avg_Pct_SD = NA,
+                 Pct_SD = NA,
+                 Airline_Delay_Pct = wide_flights$airline_delay_pct
+                 )
+
+delayed_df$Pct_SD <- ifelse(wide_flights$Airline == "AM WEST", amWest_pct_sd, delayed_df$Pct_SD)
+delayed_df$Pct_SD <- ifelse(wide_flights$Airline == "ALASKA", alaska_pct_sd, delayed_df$Pct_SD)
+
+#write to csv
+write.csv(delayed_df, 'flight_analysis.csv')
+
+flights_analysis <- read.csv('flight_analysis.csv')
+
+flights_analysis
+
+```
+
+## Visualizing Delay Percentages with Error Bars
+
+The graphs below show the percentages of delays in two different ways. Both visuals include error bars that show the variability of the data.
+
+### (1) Grouped by Airline
+
+Here we see the airlines grouped in two graphs, each with the delay percentages of the individual cities.
+
+```{r }
+
+ggplot(flights_analysis, aes(x = Pct_Delay, y = City, fill = Airline)) +
+  facet_wrap(~ Airline) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(xmin = Pct_Delay - Pct_SD, xmax = Pct_Delay + Pct_SD), width = 0.2) +
+  labs(
+    title = "Delay Percentage by City",
+    x = "Percentage",
+    y = "City"
+  )   
+
+```
+
+### (2) Grouped by City
+
+Here we see the cities grouped in five graphs. Each shows the delay percentages of the individual airlines.
+
+```{r }
+
+ggplot(flights_analysis, aes(x = Pct_Delay, y = Airline, fill = City)) +
+  facet_wrap(~ City) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(xmin = Pct_Delay - Pct_SD, xmax = Pct_Delay + Pct_SD), width = 0.2) +
+  labs(
+    title = "Delay Percentage by Airline",
+    x = "Percentage",
+    y = "Airline"
+  )   
+
+```
+
+## Overall Delay Percentage vs Airline
+
+Below I compared the overall delays for each airline and used a bar graph to compare. It is clear that ALASKA Airlines has a significantly smaller delay rate relative to their total number of flights across all cities.
+
+```{r }
+
+del_group <- flights_analysis %>%
+   group_by(Airline) %>%
+   summarize(air_delay_p = mean(Airline_Delay_Pct))
+
+ggplot(del_group, aes(x = Airline, y = air_delay_p, fill = Airline)) + geom_bar(stat = "identity") +
+  labs(
+    title = "Overall Delay Percentage by Airline",
+    x = "Airline",
+    y = "Percentage"
+  )   
+
+```
+
+## Individual Delay Percentage vs Airline (color filered by city)
+
+When breaking down the percentage comparison by city, I visualized it as (1) a single stacked graph with the information for all cities and (2) as separate graphs for each city. In either case, we see a significant difference in delay percentages across airlines.
+
+### (1) Stacked (One Graph)
+
+Here the graph is visually appealing, but may be harder to compare as the bars representing the delay percentage for each city are not properly aligned side by side.
+
+```{r }
+
+ggplot(flights_analysis, aes(x = Airline, y = Pct_Delay, fill = City)) + 
+  geom_bar(stat = "identity", position = "stack") +
+  labs(
+    title = "Individual Delay Percentage vs Airline (Stacked)",
+    x = "Airline",
+    y = "Percentage"
+  )   
+
+```
+
+### (2) Facet Wrap (Separate Graphs)
+
+Here the separate graphs represent each \textit{city} and within each graph is a comparison of their delays by \textit{airline}. The individual graphs allow easier comparison.
+
+```{r }
+
+ggplot(flights_analysis, aes(x = Airline, y = Pct_Delay, fill = City)) + 
+  facet_wrap(~ City) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Individual Delay Percentage vs Airline (Separated)",
+    x = "Airline",
+    y = "Percentage"
+  )   
+
+```
+
+## Delay Percentage vs City (color filtered by Airline)
+
+I likewise visualized it by comparing the delay percentages of each city and filled by airline. I also swapped the axes for better readability.
+
+### (1) Stacked (One Graph)
+
+```{r }
+
+ggplot(flights_analysis, aes(x = Pct_Delay, y = City, fill = Airline)) +
+  geom_bar(stat = 'identity') +
+  labs(
+    title = "Delay Percentage vs City (Stacked)",
+    x = "Percentage",
+    y = "City"
+  ) 
+
+```
+
+### (2) Facet Wrap (Separate Graphs)
+
+Here the separate graphs represent each \textit{airline} and within each graph is a comparison of their delays by \textit{city}.
+
+```{r }
+
+ggplot(flights_analysis, aes(x = Pct_Delay, y = City, fill = Airline)) +
+  facet_wrap(~ Airline) +
+  geom_bar(stat = 'identity') +
+  labs(
+    title = "Delay Percentage vs City (Separated)",
+    x = "Percentage",
+    y = "City"
+  ) 
+
+```
+
+## Conclusion
+
+My analysis focused on comparing the spread of the data according to airline as well as comparing percentages of delays.  In comparing the standard deviations of overall delayed flight percentages for each airline, we observe that AM West has a standard deviation of 0.1878894, while Alaska has a lower standard deviation of 0.1106926. This indicates that Alaska has more consistent performance in terms of flight delays, with less variability in the percentage of delayed flights compared to AM West. Although both standard deviations are quite small, suggesting that delays for both airlines are fairly stable, Alaska's slightly smaller standard deviation suggests greater reliability in maintaining a predictable schedule. When comparing the actual percentages of delays, whether by airline overall or individual cities, we see that Alaska has a smaller delay rate across the board. Based on this analysis, Alaska seems to be the better airline to fly with as they have less delays and are more consistent arrival times.

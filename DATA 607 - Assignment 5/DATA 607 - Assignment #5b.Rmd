@@ -1,0 +1,263 @@
+---
+title: "DATA 607 - Assignment #5"
+author: "Julian Adames-Ng"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+# Introduction
+
+This assignment focuses on utilizing R to create, store, and retrieve data in a variety of file formats. The process reflects a systematic approach to showcasing code and data output.
+
+## Working with XML and JSON in R
+
+\textit{Pick three of your favorite books on one of your favorite subjects.   At least one of the books should have more than one author.  For each book, include the title, authors, and two or three other attributes that you find interesting.}
+
+I chose the following three books to load into my data-frames.
+
+Book 1: Calculus by Ron Larson, Robert Hostetler, and Bruce Edwards, 8th Edition, ISBN-10: 061850298X
+Book 2: Nonlinear Dynamics and Chaos by Steven Strogatz, 3rd Edition, ISBN-10: 0367026503
+Book 3: Journey Through Genius by William Dunham, 1st Edition, ISBN-10: 9780140147391
+
+## Storing the Data
+
+\textit{Take the information that you’ve selected about these three books, and separately create three files which store the book’s information in HTML (using an html table), XML, and JSON formats (e.g.  “books.html”, “books.xml”, and “books.json”).  To help you better understand the different file structures, I’d prefer that you create each of these files “by hand” unless you’re already very comfortable with the file formats.}
+
+### HTML
+
+Before I created my data, I cleared the environment of all previous assignments. I then assigned the created data to the variable \textbf{books_html} and wrote it to a file named \textbf{books.html}.
+
+```{r html}
+
+#clears the environment of all assignments to start from scratch
+rm(list = ls())
+
+#assign HTML data to books_html
+books_html <- '
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sample HTML File</title>
+</head>
+<body>
+    <h1>Book List</h1>
+    <table border="1">
+        <tr>
+            <th>Title</th>
+            <th>Authors</th>
+            <th>Edition</th>
+            <th>ISBN_10</th>
+        </tr>
+        <tr>
+            <td>Calculus</td>
+            <td>Ron Larson, Robert Hostetler, Bruce Edwards</td>
+            <td>8th Edition</td>
+            <td>061850298X</td>
+        </tr>
+        <tr>
+            <td>Nonlinear Dynamics and Chaos</td>
+            <td>Steven Strogatz</td>
+            <td>3rd Edition</td>
+            <td>0367026503</td>
+        </tr>
+        <tr>
+            <td>Journey Through Genius</td>
+            <td>William Dunham</td>
+            <td>1st Edition</td>
+            <td>9780140147391</td>
+        </tr>
+    </table>
+</body>
+</html>
+'
+
+# Write the data to an HTML file called "books.html"
+writeLines(books_html, "books.html")
+
+```
+
+### XML
+
+I created a table with the same information and assigned it to the variable \textbf{books_xml}. I then wrote it into an XML file named \textbf{books.xml}.
+
+```{r }
+
+# Define XML
+books_xml <- '<?xml version="1.0" encoding="UTF-8"?>
+<books>
+    <book>
+        <Title>Calculus</Title>
+        <Authors>Ron Larson, Robert Hostetler, Bruce Edwards</Authors>
+        <Edition>8th Edition</Edition>
+        <ISBN_10>061850298X</ISBN_10>
+    </book>
+    <book>
+        <Title>Nonlinear Dynamics and Chaos</Title>
+        <Authors>Steven Strogatz</Authors>
+        <Edition>3rd Edition</Edition>
+        <ISBN_10>0367026503</ISBN_10>
+    </book>
+    <book>
+        <Title>Journey Through Genius</Title>
+        <Authors>William Dunham</Authors>
+        <Edition>1st Edition</Edition>
+        <ISBN_10>9780140147391</ISBN_10>
+    </book>
+</books>
+'
+
+# Write the content to an XML file
+writeLines(books_xml, "books.xml")
+
+```
+
+### JSON
+
+The JSON data structure was a bit different as it was created using lists. This would give me issues with loading the data later on. I wrote the created table into the file named \textbf{books.json}.
+
+```{r }
+
+# Load the jsonlite package
+library(jsonlite)
+
+# Define JSON data for the books
+books_json <- list(
+  books = list(
+        list(
+            Title = "Calculus",
+            Authors = "Ron Larson, Robert Hostetler, Bruce Edwards",
+            Edition = "8th Edition",
+            ISBN_10 = "061850298X"
+        ),
+        list(
+            Title = "Nonlinear Dynamics and Chaos",
+            Authors = "Steven Strogatz",
+            Edition = "3rd Edition",
+            ISBN_10 = "0367026503"
+        ),
+        list(
+            Title = "Journey Through Genius",
+            Authors = "William Dunham",
+            Edition = "1st Edition",
+            ISBN_10 = "9780140147391"
+        )
+    )
+)
+
+# Write the JSON content to a file
+write_json(books_json, "books.json", pretty = TRUE)
+
+```
+
+## Loading the Data
+
+\textit{Write R code, using your packages of choice, to load the information from each of the three sources into separate R data frames.}
+
+### Loading HTML
+
+When loading the HTML data, it was fairly easy using the \textbf{rvest} library. I made sure that the table was of \textbf{data-frame} type and assigned it to the variable \textbf{books_h}.
+
+```{r dataframes}
+
+#install.packages("rvest")
+library(rvest)
+
+# Read the HTML file
+books_html <- read_html("https://raw.githubusercontent.com/JAdames27/DATA-607---Data-Acquisition-and-Management/refs/heads/main/DATA%20607%20-%20Assignment%205/books.html")
+
+# Extract the table from the HTML file
+books_html_df <- html_table(books_html, fill = TRUE)[[1]]  # First table in the file
+
+# View the loaded data
+books_h <- as.data.frame(books_html_df)
+
+books_h
+
+```
+
+### Loading XML
+
+The XML file was similarly easy to load into a data-frame. I assigned it to the variable \textbf{books_x}.
+
+```{r }
+
+#install.packages("xml2")
+library(xml2)
+
+# Read the XML file
+books_xml <- read_xml("https://raw.githubusercontent.com/JAdames27/DATA-607---Data-Acquisition-and-Management/refs/heads/main/DATA%20607%20-%20Assignment%205/books.xml")
+
+# Extract book elements
+books_data <- xml_find_all(books_xml, "//book")
+
+# Extract relevant details for each book
+books_xml_df <- data.frame(
+  Title = xml_text(xml_find_all(books_data, "Title")),
+  Authors = xml_text(xml_find_all(books_data, "Authors")),
+  Edition = xml_text(xml_find_all(books_data, "Edition")),
+  ISBN_10 = xml_text(xml_find_all(books_data, "ISBN_10"))
+)
+
+# View the loaded data
+books_x <- as.data.frame(books_xml_df)
+
+books_x
+
+```
+
+### Loading JSON
+
+When loading the JSON file, I initially had some trouble as the formatting of the table was as nested lists. Reading the information required me to alter the data types in order to index and assign my columns and rows properly. The final data-frame was assigned to the variable \textbf{books_j}.
+
+```{r }
+
+# Load the jsonlite package
+library(jsonlite)
+
+# Read the JSON file
+books_json_rd <- fromJSON("https://raw.githubusercontent.com/JAdames27/DATA-607---Data-Acquisition-and-Management/refs/heads/main/DATA%20607%20-%20Assignment%205/books.json")
+
+Title = sapply(books_json_rd$books[,1], as.character)
+Authors = sapply(books_json_rd$books[,2], as.character)
+Edition = sapply(books_json_rd$books[,3], as.character)
+ISBN_10 = sapply(books_json_rd$books[,4], as.character)
+
+# Convert to a data frame
+books_json_df <- data.frame(
+  Title,
+  Authors,
+  Edition,
+  ISBN_10
+)
+
+books_j <- as.data.frame(books_json_df)
+
+books_j
+
+```
+
+### Congruence
+
+\textit{Are the three data frames identical?}
+
+In order to verify this, I used the 'identical()' function and compared each of the three data-frames two at a time. For each verification, the outcomes of the "checks" were TRUE.
+
+```{r }
+
+identical(books_h, books_x)
+identical(books_x, books_j)
+#not necessary
+identical(books_j, books_h)
+
+```
+
+# Conclusion
+
+This assignment demonstrates the effective use of R for handling data in multiple file formats, including reading, writing, and manipulating data stored in JSON, XML, and HTML. The code provided highlights the process of data storage and retrieval, emphasizing R's flexibility in managing different file types.

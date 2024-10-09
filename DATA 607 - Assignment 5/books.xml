@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<books>
+    <book>
+        <Title>Calculus</Title>
+        <Authors>Ron Larson, Robert Hostetler, Bruce Edwards</Authors>
+        <Edition>8th Edition</Edition>
+        <ISBN_10>061850298X</ISBN_10>
+    </book>
+    <book>
+        <Title>Nonlinear Dynamics and Chaos</Title>
+        <Authors>Steven Strogatz</Authors>
+        <Edition>3rd Edition</Edition>
+        <ISBN_10>0367026503</ISBN_10>
+    </book>
+    <book>
+        <Title>Journey Through Genius</Title>
+        <Authors>William Dunham</Authors>
+        <Edition>1st Edition</Edition>
+        <ISBN_10>9780140147391</ISBN_10>
+    </book>
+</books>
+

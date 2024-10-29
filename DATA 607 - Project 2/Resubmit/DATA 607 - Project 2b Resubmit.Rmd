@@ -1,0 +1,331 @@
+---
+title: "DATA 607 - Project 2: Data Set 2 (Resubmit)"
+author: "Julian Adames-Ng"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+
+#tinytex::install_tinytex()
+#install and load libraries
+#install.packages('RMySQL', repos='http://cran.us.r-project.org')
+#install.packages('dplyr')
+#install.packages('tidyr')
+#install.packages('DT')
+#install.packages('readr')
+
+options(repos = c(CRAN = "https://cloud.r-project.org/"))
+library(DT)
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(ggplot2)
+library(readr)
+
+```
+
+# Introduction
+
+When working with data, you should expect to spend a good amount of time in the clean-up process, but it is not always 'messy' or unreadable.  For example, data can still be organized in a data-frame in a way that is readable, but at the same time it may not be useful in such presented formats.  In these cases, we may have to transpose the data-frame and re-organize to fit our needs.
+
+The following data is obtained from the National Oceanic and Atmospheric Administration and tracks the starting and ending dates of the atmospheric data retrieval process in various locations on Earth. The data is retrieved using specialized sensors called radiosondes which are attached to weather balloons and track information such as wind speed, wind direction, temperature and relative humidity and different heights throughout its ascent.
+
+
+## 1. Loading Data: Creating the Initial Data-Frame and Writing to CSV File
+
+The data is loaded from a URL into a data-frame called 'radiosonde_df'. I then write the original data to a csv file called "noaa_data.csv".
+
+```{r }
+
+rm(list = ls())
+
+noaa_url <- url("https://www.ncei.noaa.gov/data/integrated-global-radiosonde-archive/doc/wmo-sonde-history.txt")
+
+radiosonde_df <- read.table(noaa_url, header = FALSE) %>%
+  as_tibble() %>%
+  rename(Station_ID = V1, Beg_Year = V2, Beg_Month = V3, Beg_Day = V4, Beg_Hour = V5, 
+         End_Year = V6, End_Month = V7, End_Day = V8, End_Hour = V9, Code = V10)
+
+#view current state of data-frame
+head(radiosonde_df)
+
+write_csv(radiosonde_df, 'noaa_data.csv')
+
+```
+
+## 2. Loading Data: Reading the Data-Frame from the Created CSV File
+
+Now I can read my data to begin working on it. I read the csv file into R and assign it to the variable "noaa_data_df". I then take a glimpse at the data frame using the head() function. However, since this is only a glimpse, I use the nrow() function to help me determine the number of observations/rows in the data frame. This will help me determine my course of action when transforming the data.
+
+```{r }
+
+noaa_data_df <- read_csv('noaa_data.csv', show_col_types = FALSE)
+
+head(noaa_data_df)
+
+nrow(noaa_data_df)
+
+```
+
+## 3. Filtering the Data
+
+From using the nrow() function above, we see that there are 141,552 rows. Since my data is vast and spans a multitude of countries and specific locations within each country, I filtered my data to only include the top three countries with the most active hurricane seasons, namely China, Japan and the Philippines. I also grouped all of the different stations by country to consolidate my data. Using the nrow() function again on the filtered data, we see that this significantly reduced the data observations to 1731 which is much more reasonable to work with.
+
+```{r }
+
+countries_filtered <- noaa_data_df %>%
+  filter((Station_ID >= "CH" & Station_ID < "CI") | 
+         (Station_ID >= "RP" & Station_ID < "RQ") | 
+         (Station_ID >= "JA" & Station_ID < "JB"))
+
+head(countries_filtered)
+
+nrow(countries_filtered)
+
+```
+
+## 4. Transforming the Data Frame
+
+I created a new column called "Country" and assigned the appropriate country based on the station ID. Station IDs that start with 'C' in the filtered data frame are all located in China. Station IDs that start with 'R' are in the Philippines, and if it started with 'J', they are in Japan.
+
+```{r }
+
+countries_filtered$Country <- NA
+
+i <- 1
+
+for (row in countries_filtered$Station_ID){
+  #print(strsplit(row, NULL)[[1]][1])
+  country <- ifelse(strsplit(row, NULL)[[1]][1] == 'C', 'China',
+                ifelse(strsplit(row, NULL)[[1]][1] == 'R', 'Philippines',
+                'Japan'
+                )
+             )
+  countries_filtered$Country[i] <- country
+  i <- i + 1
+}
+
+head(countries_filtered)
+
+```
+
+## 5. Removing Columns
+
+For my purposes, I decided to only work with the data that specified the start and end date of a data retrieval process, but in years. I removed all unnecessary columns.
+
+```{r }
+
+countries <- countries_filtered[, -c(1, 3:5, 7:10)]
+
+head(countries)
+
+```
+
+## 6. Organization
+
+I decided to group my data by the start dates that indicate when the radiosondes were deployed and arranged it in increasing chronological order.
+
+```{r }
+
+countries2 <- countries %>%
+  group_by(Beg_Year) %>%
+  arrange(Country, Beg_Year)
+
+countries2
+
+```
+
+## 7. Start and End Date Counts
+
+Next, I created columns that included the count of the number of deployments for a given year and location. I then check the number of rows again and see it narrowed down to 126.
+
+```{r }
+
+countries_count1 <- countries2 %>%
+  group_by(Country, Beg_Year, End_Year) %>%
+  summarize(Beg_Count = n(), End_Count = n(), .groups = 'drop')
+
+countries_count1 <- countries_count1[, c(1, 2, 4, 3, 5)]
+
+head(countries_count1)
+
+nrow(countries_count1)
+
+```
+
+## 8. Visualization: Start Dates
+
+Since the data frame has 126 lines of observations, I decided to make better sense of it using a visual. In this visual, I focused mainly on the start dates of radiosonde deployment for each country. We can see that most deployments started after 2010 or so, regardless of the location.
+
+```{r }
+
+ggplot(countries_count1, aes(x = Beg_Year, y = Beg_Count, fill = Country)) +
+  facet_wrap(~ Country) +
+  geom_bar(stat = "identity")
+
+```
+
+## 9. Visualization: End Dates
+
+I created a similar visual for the ending dates of deployment. However, I chose to work with the start dates.
+
+```{r }
+
+ggplot(countries_count1, aes(x = End_Year, y = End_Count, fill = Country)) +
+  facet_wrap(~ Country) +
+  geom_bar(stat = "identity")
+
+```
+
+## 10. Narrowing Down
+
+To narrow down my data, I chose to look at the deployments starting in 2011.
+
+```{r }
+
+filtered_dates <- countries_count1 %>%
+  filter(Beg_Year > 2011)
+
+filtered_dates
+
+```
+
+## 11. Pivoting
+
+After initially narrowing down, I decide to pivot my data to a wider format, but to avoid too many columns I consolidated the start date data by ranges. The first range is from 2011-2015. The second range is from 2016-2020. To do this, I used the mutate() function to filter, the group_by() function to group accordingly, and the summarize() function to aggregate my data to find the count totals. Then I use the pivot_wider() function to transform the data frame by pivoting using the total count criteria.
+
+```{r }
+
+filtered_data <- filtered_dates %>%
+  mutate(Beg_Year_Range = case_when(
+    Beg_Year >= 2011 & Beg_Year <= 2015 ~ "2011_2015",
+    Beg_Year >= 2016 & Beg_Year <= 2020 ~ "2016_2020",
+    TRUE ~ "Other"
+  ),
+  End_Year_Range = case_when(
+    End_Year >= 2011 & End_Year <= 2015 ~ "2011_2015",
+    End_Year >= 2016 & End_Year <= 2020 ~ "2016_2020",
+    TRUE ~ "Other"
+  ))
+
+summarized_data <- filtered_data %>%
+  group_by(Country, Beg_Year_Range, End_Year_Range) %>%
+  summarize(
+    Beg_Count_Sum = sum(Beg_Count, na.rm = TRUE),
+    End_Count_Sum = sum(End_Count, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+# Pivot the data using tidyr to get the year ranges in separate columns
+pivoted_data <- summarized_data %>%
+  pivot_wider(names_from = Beg_Year_Range, values_from = Beg_Count_Sum, names_prefix = "Beg_") %>%
+  pivot_wider(names_from = End_Year_Range, values_from = End_Count_Sum, names_prefix = "End_")
+
+pivoted_data
+
+```
+
+## 12. Totaling the Columns
+
+Each row in the table above shows the number of radiosonde deployments corresponding to each country. We see that were are three rows for each country. This is because each row shows the count for a completed deployment, so their beginning count and ending count will match up.
+
+For example, let's take a look at the first three rows of the data frame above that correspond to China.
+
+-Row 1 shows that 5 radiosondes were deployed during 2011-2015 and they collected data until they were recalled in 2011-2015 as well.
+-Row 2 shows that 94 radiosondes were deployed during 2011-2015 and were not recalled until some time in 2016-2020.
+-Row 3 shows that 287 radiosondes were deployed during 2016-2020 and were all recalled in 2016-2020.
+
+To make things a bit simpler, let's just look at the total number of deployments (beginning) and the total number of recalls (ending) for each country and by date range. By totaling the numbers up, we lose track of the correspondence between start and end dates, but for my analysis, this is not needed. Below is the condensed data frame.
+
+```{r }
+
+total_counts <- pivoted_data %>%
+  group_by(Country) %>%
+  summarize(
+    Total_Beg_2011_2015 = sum(Beg_2011_2015, na.rm = TRUE),
+    Total_Beg_2016_2020 = sum(Beg_2016_2020, na.rm = TRUE),
+    Total_End_2011_2015 = sum(End_2011_2015, na.rm = TRUE),
+    Total_End_2016_2020 = sum(End_2016_2020, na.rm = TRUE)
+  )
+
+# View the result
+total_counts
+
+```
+
+## 13. Comparison
+
+In the table above, we see the individual number of deployments and recalls for each country for the aforementioned year ranges. I then computed the mean for all deployments and for each date range. The mean for 2011-2015 is 182.6667 and the mean number of deployments for 2016-2020 is 322.
+
+```{r }
+
+mean1 <- total_counts %>%
+  summarize(Pre2016_Mean = mean(total_counts$Total_Beg_2011_2015))
+
+mean1
+
+mean2 <- total_counts %>%
+  summarize(Post2015_Mean = mean(total_counts$Total_Beg_2016_2020))
+
+mean2
+
+```
+
+## 14. Consolidating Data
+
+I put my mean data in the same data frame as my individual counts.
+
+```{r }
+
+total_counts2 <- total_counts[, -c(4,5)]
+
+total_counts2$Mean_Pre2016 <- mean1$Pre2016_Mean[1]
+total_counts2$Mean_Post2015 <- mean2$Post2015_Mean[1]
+
+total_counts2
+
+```
+
+## 15. Visualizing by Time Frame
+
+Below, I plotted the mean data with the deployment counts for each country. The first graph colored in blue represents the data from 2011-2015 and the second one colored in red represents the data from 2016-2020.
+
+```{r }
+
+#blue plot for 2011-2015
+ggplot(total_counts2, aes(x = Country)) +
+  geom_bar(aes(y = Total_Beg_2011_2015, fill = "Total_Beg_2011_2015"), stat = "identity", position = "dodge", alpha = 0.5) +
+  geom_point(aes(y = Mean_Pre2016, color = "Mean_Pre2016"), size = 3) +
+  geom_line(aes(y = Mean_Pre2016, group = 1, color = "Mean_Pre2016"), linetype = "dashed") +
+  labs(title = "Comparison of Counts and Means Across Periods",
+       x = "Country", 
+       y = "Value",
+       fill = "Counts",
+       color = "Means") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Total_Beg_2011_2015" = "blue")) +
+  scale_color_manual(values = c("Mean_Pre2016" = "blue"))
+
+#red plot for 2016-2020
+ggplot(total_counts2, aes(x = Country)) +
+  geom_bar(aes(y = Total_Beg_2016_2020, fill = "Total_Beg_2016_2020"), 
+           stat = "identity", position = "dodge", alpha = 0.5) +
+  geom_point(aes(y = Mean_Post2015, color = "Mean_Post2015"), size = 3) +
+  geom_line(aes(y = Mean_Post2015, group = 1, color = "Mean_Post2015"), linetype = "dashed") +
+  labs(title = "Comparison of Counts and Means Across Periods",
+       x = "Country", 
+       y = "Value",
+       fill = "Counts",
+       color = "Means") +
+  theme_minimal() + 
+  scale_fill_manual(values = c("Total_Beg_2016_2020" = "red")) +
+  scale_color_manual(values = c("Mean_Post2015" = "red"))
+  
+```
+
+# Conclusion
+
+In my analysis, I found that China had a significantly lower number of deployments prior to 2016 at 99. The Philippines were next at a count of 144 and Japan had a whopping 305 deployments from 2011-2015. This suggests that Japan had a larger presence of severe weather phenomena during this time period. When comparing the deployments during 2016-2020, both China's and the Philippines' deployment numbers nearly tripled, whereas Japan's decreased by over 100 deployments. This suggests that post 2015, the weather activity in China and the Philippines picked up significantly and in Japan it decline a bit. When comparing the overall means for deployment count in each period, the number nearly doubles from the first date range to the next. This would suggest to me that despite the specific country, the overall activity in the eastern part of Asia picked up toward the latter end of the decade. Of course, these are just deployment counts and the increase in deployments could be due to other factors such as available financial resources and politics. However, it is reasonable to attribute these numbers to increased interest in understanding the heightened weather activity in Eastern Asia.

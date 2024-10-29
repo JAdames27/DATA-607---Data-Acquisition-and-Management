@@ -1,0 +1,186 @@
+---
+title: "DATA 607 - Project 2: Data Set 3 (Resubmit)"
+author: "Julian Adames-Ng"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+
+#install and load libraries
+#install.packages('RMySQL', repos='http://cran.us.r-project.org')
+#install.packages('dplyr')
+#install.packages('tidyr')
+#install.packages('DT')
+#install.packages('readr')
+
+options(repos = c(CRAN = "https://cloud.r-project.org/"))
+library(DT)
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(ggplot2)
+library(readr)
+
+```
+
+# Introduction
+
+When working with data, you should expect to spend a good amount of time in the clean-up process, but it is not always 'messy' or unreadable.  For example, data can still be organized in a data-frame in a way that is readable, but at the same time it may not be useful in such presented formats.  In these cases, we may have to transpose the data-frame and re-organize to fit our needs.
+
+The following data set is obtained from Kaggle.com and provides the MRI (Magnetic Resonance Imaging) information on individuals from a wide range of ages and backgrounds as well as other tracking data such as identification numbers, etc. Here we will compare the different variables with the corresponding "CDR" or Clinical Dementia Rating for that individual. The CDR ratings have values ranging from 0 to 2, in 0.5 increments.  The larger the CDR value, the more severe the case of dementia.
+
+
+## 1. Loading Data: Loading the TSV File (Tab Separated Values)
+
+The data is loaded from a tsv file into the assignment 'oasis'.
+
+```{r }
+
+rm(list = ls())
+
+oasis_tsv <- read.csv("oasis.tsv")
+
+head(oasis_tsv)
+
+```
+
+## 2. Loading Data: Cleaning
+
+From above, we can see that all of the data is grouped into one column, including the header row. Below I separated the data as needed, then I reassigned the column names.
+
+```{r }
+
+oasis_tsv <- oasis_tsv %>%
+  separate(
+    col = names(oasis_tsv)[1],
+    into = c("ID", "Gender", "Hand_Dominance", "Age", "Educ", "Socio_Econ", "MMSE", "CDR", "eTIV", "nWBV", "ASF", "Delay"),
+    sep = "\t"
+  )
+
+write.csv(oasis_tsv, "oasis.csv")
+
+oasis_csv <- read.csv("oasis.csv")
+
+head(oasis_csv)
+
+```
+
+## 3. Removing Columns
+
+On this step, I removed the columns that included unnecessary data and only kept information on Gender, Age, Education, Socio-Economic Status, and the CDR or Critical Dementia Rating.
+
+```{r }
+
+dementia <- oasis_csv[,-c(1,4,8,10:13)]
+
+colnames(dementia) <- c("ID", "Gender", "Age", "Educ", "Socio_Econ", "DementiaRating")
+
+head(dementia)
+
+```
+
+## 4. Data Types
+
+Although the data frame seems usable, the data types are incorrect. I changed the data types for select columns so that I can do some analysis.
+
+```{r }
+
+dementia_df <- dementia %>%
+  mutate(                
+    Age = as.numeric(Age),                    
+    Gender = as.factor(Gender),             
+    Educ = as.factor(Educ),
+    Socio_Econ = as.factor(Socio_Econ),                
+    DementiaRating = as.numeric(DementiaRating),               
+  )
+
+head(dementia_df)
+
+```
+
+## 5. Comparing Variables & Visualization
+
+### (a) Gender vs CDR
+
+Now that I've narrowed down my data, I group by one of these column variables and aggregate it to get the mean of that variable column. I then use ggplot to visualize my comparison.
+
+```{r }
+
+avg_cdr_gender <- dementia_df %>%
+  group_by(Gender) %>%
+  summarize(avg_dementia_rating = mean(DementiaRating, na.rm = TRUE))
+
+avg_cdr_gender
+
+ggplot(avg_cdr_gender, aes(x = Gender, y = avg_dementia_rating, fill = Gender)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Average Dementia Rating by Gender", x = "Gender", y = "Average Dementia Rating") +
+  theme_minimal()
+
+```
+
+### (b) Age vs CDR
+
+```{r }
+
+# Remove rows with NA in specific columns (e.g., CDR, Gender, Age)
+dementia_df <- dementia_df %>%
+  filter(!is.na(DementiaRating), !is.na(Gender), !is.na(Age))
+
+# Calculate average CDR by Age
+avg_cdr_age <- dementia_df %>%
+  group_by(Age) %>%
+  summarize(avg_dementia_rating = mean(DementiaRating, na.rm = TRUE))
+
+avg_cdr_age
+
+ggplot(avg_cdr_age, aes(x = Age, y = avg_dementia_rating)) +
+  geom_line(color = "blue") +
+  geom_point(color = "red") +
+  labs(title = "Average Dementia Rating by Age", x = "Age", y = "Average Dementia Rating") +
+  theme_minimal()
+
+```
+
+### (c) Socio-Economic Status vs CDR
+
+```{r }
+
+# Calculate average CDR by Socio-economic Status (SES)
+avg_cdr_ses <- dementia_df %>%
+  group_by(Socio_Econ) %>%
+  summarize(avg_dementia_rating = mean(DementiaRating, na.rm = TRUE))
+
+avg_cdr_ses
+
+ggplot(avg_cdr_ses, aes(x = factor(Socio_Econ), y = avg_dementia_rating, fill = factor(Socio_Econ))) +
+  geom_bar(stat = "identity") +
+  labs(title = "Average Dementia Rating by Socio-economic Status", x = "Socio-economic Status", y = "Average Dementia Rating") +
+  theme_minimal()
+
+```
+
+### (d) Education vs CDR
+
+```{r }
+
+# Calculate average CDR by Education
+avg_cdr_education <- dementia_df %>%
+  group_by(Educ) %>%
+  summarize(avg_dementia_rating = mean(DementiaRating, na.rm = TRUE))
+
+avg_cdr_education
+
+ggplot(avg_cdr_education, aes(x = factor(Educ), y = avg_dementia_rating, fill = factor(Educ))) +
+  geom_bar(stat = "identity") +
+  labs(title = "Average Dementia Rating by Education Level", x = "Education Level", y = "Average Dementia Rating") +
+  theme_minimal()
+
+```
+
+# Conclusion
+
+My analysis for this data set involved comparing the CDR (Critical Dementia Rating) with Age, Gender, Socio-Economic Status, and Education. My process involved sifting through the data, using the filter() and group_by() functions to narrow down the data set based on the specified criteria, summarizing my data using the mean counts and determining which pair of variables had the most promising results in terms of a functional relationship. Based on this analysis we see that, when grouped by gender, males have a larger average CDR. This could be accounted for in genetic differences among males and females. When comparing CDR and Age, we see significant value increases once we look in the age range of those older than 60 years old, as we would naturally expect. When comparing the CDR to Socio-Economic Status, however, we see that the higher the status, the larger the average CDR rate. One possibility is that the higher the status is associated with jobs that require more responsibility and therefore produce more stress which may have a positive effect on dementia. In contrast, we see an inverse relationship between education level and CDR. This could be attributed to the fact that more educated people tend to have more 'active' minds which may keep symptoms of dementia from manifesting sooner. 

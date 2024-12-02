@@ -1,0 +1,246 @@
+---
+title: "DATA 607 - Project 4: Document Classification"
+author: "Julian Adames-Ng"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(tidytext)
+library(stringr)
+library(tm)
+library(e1071)
+library(caret)
+library(readr)
+
+```
+
+# Introduction
+
+It can be useful to be able to classify new "test" documents using already classified "training" documents.  A common example is using a corpus of labeled spam and ham (non-spam) e-mails to predict whether or not a new document is spam.  
+
+For this project, you can start with a spam/ham dataset, then predict the class of new documents (either withheld from the training dataset or from another source such as your own spam folder).   One example corpus:   https://spamassassin.apache.org/old/publiccorpus/
+
+## Downloading and Extracting the Corpus Data
+
+First we must download the tar files, then uncompress and extract from the archive.
+I used ham data from the "20021010_easy_ham.tar.bz2" file and spam data from the 
+"20021010_spam.tar.bz2" file in the public corpus directory that was provided in the link above.
+
+```{r }
+
+rm(list = ls())
+
+# assign spam/ham data from urls
+spam_link <- "https://spamassassin.apache.org/old/publiccorpus/20021010_spam.tar.bz2"
+ham_link <- "https://spamassassin.apache.org/old/publiccorpus/20021010_easy_ham.tar.bz2"
+
+# download spam_link and save as spam_tar
+# first assign the basename of the file path for the spam link tar file
+spam_tar <- basename(spam_link)
+download.file(spam_link, spam_tar)
+untar(spam_tar, exdir="spamham_folder")
+
+# download ham_link and save as ham_tar
+ham_tar <- basename(ham_link)
+download.file(ham_link, ham_tar)
+untar(ham_tar, exdir="spamham_folder")
+
+```
+
+## Preparing and Combining Email Datasets
+
+This code processes email data by reading spam and ham emails from their respective directories, labeling them, combining them into a single dataset, and shuffling the rows for randomness.
+
+```{r }
+
+ham_path <- "./spamham_folder/easy_ham/"
+spam_path <- "./spamham_folder/spam/"
+
+#define a function which takes a file path and a tag (to indicate spam or ham) as parameters
+spamham_func <- function(path, tag) {
+  #unlist all the emails into a vector (each element is one email)
+  hs_email <- unlist(lapply(list.files(path, full.names = TRUE, recursive = TRUE), read_file))
+  #store the data in a data frame with the columns that 
+  #correspond to the email vector and the tag parameter
+  data.frame(hs_email = hs_email, tag = tag)
+}
+
+#create two data frames for ham and spam using the pre-define function above
+ham_mail <- spamham_func(ham_path, tag="ham") 
+spam_mail <- spamham_func(spam_path, tag="spam") 
+
+#bind them into one and count the number of spam and ham emails
+emails <- rbind(ham_mail, spam_mail)
+table(emails$tag)
+
+#shuffle the data for randomness
+emails <- emails[sample(c(1:length(emails)))]
+
+```
+
+## Cleaning, Tokenizing, and Creating a Document-Term Matrix
+
+Here, we clean and preprocess the email data by removing unnecessary characters, tokenizing the text, eliminating stop words, creating a corpus for further transformations, and finally generating a binary document-term matrix (DTM) to analyze word frequencies.
+
+```{r }
+
+#Remove all unnecessary data from the email column including special characters and whitespace
+emails <- emails  %>% 
+  mutate(hs_email = str_remove_all(hs_email, pattern = "<.*?>")) %>%
+  mutate(hs_email = str_remove_all(hs_email, pattern = "[:digit:]")) %>%
+  mutate(hs_email = str_remove_all(hs_email, pattern = "[:punct:]")) %>%
+  mutate(hs_email = str_remove_all(hs_email, pattern = "[\\r\\n\\t]+")) %>%
+  mutate(hs_email = str_to_lower(hs_email)) %>%
+  #split emails into smaller chunks by token (paragraphs) and create a "text" column
+  #with the paragraph content
+  unnest_tokens(output=text,input=hs_email, token="paragraphs", format="text") %>%
+  #remove "stop words" found in the stop_words data frame from the tidytext package
+  #these words, such as the, and, is, a, etc. are also unnecessary in this context
+  anti_join(stop_words, by=c("text"="word"))
+
+#further data cleaning in the corpus
+#convert emails data to corpus
+clean_corpus <- VCorpus(VectorSource(emails$text))
+#use tm_map() and the appropriate transformations to clean the data
+clean_corpus <- tm_map(clean_corpus, removeNumbers)
+clean_corpus <- tm_map(clean_corpus, removePunctuation)
+clean_corpus <- tm_map(clean_corpus, stripWhitespace)
+clean_corpus <- tm_map(clean_corpus, removeWords, stopwords("english")) 
+clean_corpus <- tm_map(clean_corpus, stemDocument)
+clean_corpus <- tm_map(clean_corpus, content_transformer(stringi::stri_trans_tolower))
+
+#shuffle corpus data
+emails_corpus <- clean_corpus[sample(c(1:length(clean_corpus)))]
+
+
+#create a document-term matrix using the corpus data to count the frequency of certain words
+emails_tm <-  removeSparseTerms(DocumentTermMatrix(emails_corpus, control = list(stemming = TRUE)), 1-(10/length(emails_corpus)))
+
+#convert the frequencies in the dtm above into binary
+n <- function(x) {
+  y <- ifelse(x > 0, 1,0)
+  y <- factor(y, levels=c(0,1), labels=c(0,1))
+  y
+}
+
+emails_tm
+
+#return the number or rows and columns in the dtm
+dim(emails_tm)
+
+```
+
+## Transforming Document-Term Matrix into a Usable Data Frame with Classification
+
+Now we convert the document-term matrix (DTM) into a dense matrix, transform it into a data frame with numeric values, add a classification column for spam or ham, and ensure the class column is treated as a factor for further analysis.
+
+```{r }
+
+#condense the sparse dtm into a simple matrix and convert it to a data frame for ease of use
+emails_dense <- emails_tm %>%
+  as.matrix() %>%
+  as.data.frame() %>%
+  #make sure data is numeric
+  sapply(., as.numeric) %>%
+  as.data.frame() %>%
+  #add classification column and reorder it to the first column
+  mutate(class = emails$tag ) %>%
+  select(class, everything())
+
+#convert the class column to a factor type
+emails_dense$class <- as.factor(emails_dense$class)
+#confirm structure of the class column
+str(emails_dense$class)
+
+```
+
+## Balancing Dataset and Creating Training and Testing Sets
+
+Since my initial run of this gave me a low accuracy percentage of about 19%, I reattempted with
+a more balanced data set. I used 500 of each type of email and created one data set. This brought
+my accuracy up to 54%. I then tried to make it proportional since there is most likely not
+a 50/50 balance between spam and ham emails in real life. I ultimately stuck to using a 35:65 ham
+to spam split, with a total of 1000 emails.
+
+```{r }
+
+ham_dense <- emails_dense[emails_dense$class == "ham",][1:350,]
+spam_dense <- emails_dense[emails_dense$class == "spam",][1:650,]
+
+#ham_dense
+#spam_dense
+
+emails_balanced <- rbind(ham_dense, spam_dense)
+
+#Creating a training data set using 75% of the emails
+train_emails <- floor(0.75 * nrow(emails_balanced))
+            
+
+#select a random sample
+set.seed(10463)
+rsample <- sample(seq_len(nrow(emails_dense)), size = train_emails)
+
+#create training and test sets
+train_set <- emails_balanced[rsample, ]
+test_set <-  emails_balanced[-rsample, ]
+
+#verify counts
+n_train <- train_set$class
+n_test <- test_set$class
+
+#Creating proportion for training & test Spam
+prop.table(table(n_train))
+
+```
+## Training the Naive Bayes Classifier Model
+
+The naiveBayes() function trains a Naive Bayes classifier using the training dataset 
+and class labels, then displays the first three sets of conditional probability tables 
+for the terms in the model.
+
+```{r }
+
+#use naiveBayes() to train the classifier model using the training set and count
+model <- naiveBayes(train_set, n_train)
+head(model$tables,3)
+
+```
+
+## Predicting Classifications with the Naive Bayes Model
+
+```{r }
+
+#use predict() to predict the classification of the test dataset using our model
+pred <- predict(model, test_set)
+
+table(pred, actual=test_set$class)
+
+```
+
+## Evaluating Model Accuracy with a Confusion Matrix
+
+To evaluate the performance of the Naive Bayes model, we generate a confusion matrix to
+compare predictions with actual labels, calculating various metrics, and extracting
+the overall accuracy of the model.
+
+```{r }
+
+#assess the accuracy of the prediction using a confusion matrix of true/false predictions
+conf_mat <- confusionMatrix(pred, n_test, positive = "spam", 
+                dnn = c("Prediction","Actual"))
+
+conf_mat
+conf_mat$overall["Accuracy"]
+
+
+```
+
+# Conclusion
+
+The Naive Bayes classifier performed poorly in classifying emails. Using the data on my final trial, with an overall accuracy of 41.93%, far below the baseline No Information Rate (NIR) of 58.07%. This means the model underperformed compared to a naive approach of always predicting the majority class (ham). The confusion matrix reveals that all spam emails were misclassified as ham, resulting in a sensitivity of 0.00%, which indicates a complete failure to detect spam. On the other hand, the model achieved a specificity of 100%, correctly identifying all ham emails. The Kappa statistic of 0 shows no agreement between the model's predictions and the actual classes beyond random chance. These results highlight the need for significant improvements, such as addressing the imbalanced dataset, enhancing preprocessing, selecting more informative features, or adopting alternative classification methods to improve spam detection.
